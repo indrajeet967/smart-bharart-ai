@@ -1,0 +1,294 @@
+{
+  "users": [
+    {
+      "uid": "mock_user_z62p8moys",
+      "email": "singhjeet7751@gmail.com",
+      "displayName": "Indrajeet ",
+      "photoURL": "https://api.dicebear.com/7.x/adventurer/svg?seed=singhjeet7751@gmail.com",
+      "state": "",
+      "interests": [],
+      "rewardPoints": 0,
+      "badges": [],
+      "role": "user",
+      "createdAt": "2026-07-07T05:50:20.367Z",
+      "_id": "mock_malw8kwan"
+    },
+    {
+      "uid": "mock_google_al2ds42z4",
+      "email": "citizen.bharat@gmail.com",
+      "displayName": "Citizen Bharat",
+      "photoURL": "https://images.unsplash.com/photo-1535713875002-d1d0cf377fde?auto=format&fit=crop&q=80&w=100",
+      "state": "",
+      "interests": [],
+      "rewardPoints": 0,
+      "badges": [],
+      "role": "user",
+      "createdAt": "2026-08-23T12:08:37.533Z",
+      "_id": "mock_kv1anf52p"
+    }
+  ],
+  "complaints": [],
+  "schemes": [
+    {
+      "title": "Pradhan Mantri Kisan Samman Nidhi (PM-KISAN)",
+      "description": "An initiative by the Government of India that provides up to ₹6,000 per year in three equal installments to all small and marginal farmers.",
+      "category": "Agriculture",
+      "state": "All",
+      "benefits": "Direct income support of ₹6,000 per year in three equal installments of ₹2,000 directly into the bank accounts of farmers.",
+      "eligibility": {
+        "ageMin": 18,
+        "ageMax": 100,
+        "gender": "All",
+        "incomeMax": 300000,
+        "occupation": [
+          "Farmer",
+          "Agriculture Work"
+        ],
+        "category": [
+          "All"
+        ],
+        "disability": false,
+        "student": false
+      },
+      "applyUrl": "https://pmkisan.gov.in/",
+      "_id": "scheme_1",
+      "createdAt": "2026-07-07T05:16:14.498Z"
+    },
+    {
+      "title": "Ayushman Bharat - Pradhan Mantri Jan Arogya Yojana (PM-JAY)",
+      "description": "The largest health assurance scheme in the world, aiming to provide a health cover of ₹5 lakhs per family per year for secondary and tertiary care hospitalization.",
+      "category": "Healthcare",
+      "state": "All",
+      "benefits": "Health cover of ₹5,000,000 per family per year. Cashless and paperless access to services at empanelled hospitals.",
+      "eligibility": {
+        "ageMin": 0,
+        "ageMax": 120,
+        "gender": "All",
+        "incomeMax": 250000,
+        "occupation": [
+          "Laborer",
+          "Unemployed",
+          "Domestic Worker",
+          "Any"
+        ],
+        "category": [
+          "All"
+        ],
+        "disability": false,
+        "student": false
+      },
+      "applyUrl": "https://pmjay.gov.in/",
+      "_id": "scheme_2",
+      "createdAt": "2026-07-07T05:16:14.498Z"
+    },
+    {
+      "title": "Pradhan Mantri Awas Yojana (PMAY-U/G)",
+      "description": "Government program to provide affordable housing for the rural and urban poor with a target of building 2 crore affordable houses.",
+      "category": "Housing",
+      "state": "All",
+      "benefits": "Financial assistance for house construction and interest subsidy on home loans starting from 3% to 6.5%.",
+      "eligibility": {
+        "ageMin": 18,
+        "ageMax": 99,
+        "gender": "All",
+        "incomeMax": 600000,
+        "occupation": [
+          "Any"
+        ],
+        "category": [
+          "All"
+        ],
+        "disability": false,
+        "student": false
+      },
+      "applyUrl": "https://pmaymis.gov.in/",
+      "_id": "scheme_3",
+      "createdAt": "2026-07-07T05:16:14.498Z"
+    },
+    {
+      "title": "Post Matric Scholarship Scheme for SC Students",
+      "description": "A centrally sponsored scheme that provides financial assistance to Scheduled Caste students studying at post-matriculation or post-secondary stages.",
+      "category": "Education",
+      "state": "All",
+      "benefits": "100% funding for compulsory non-refundable fees, and a monthly maintenance allowance up to ₹1,200 depending on the course.",
+      "eligibility": {
+        "ageMin": 15,
+        "ageMax": 30,
+        "gender": "All",
+        "incomeMax": 250000,
+        "occupation": [
+          "Any"
+        ],
+        "category": [
+          "SC"
+        ],
+        "disability": false,
+        "student": true
+      },
+      "applyUrl": "https://scholarships.gov.in/",
+      "_id": "scheme_4",
+      "createdAt": "2026-07-07T05:16:14.498Z"
+    },
+    {
+      "title": "Stand-Up India Scheme",
+      "description": "Promotes entrepreneurship among women and Scheduled Castes or Scheduled Tribes by providing bank loans between ₹10 lakh and ₹1 crore.",
+      "category": "Business",
+      "state": "All",
+      "benefits": "Composite bank loans from ₹10 lakh to ₹1 crore for setting up a greenfield enterprise in manufacturing, services or trading.",
+      "eligibility": {
+        "ageMin": 18,
+        "ageMax": 100,
+        "gender": "Female",
+        "incomeMax": 9999999,
+        "occupation": [
+          "Business Owner",
+          "Unemployed",
+          "Any"
+        ],
+        "category": [
+          "SC",
+          "ST",
+          "OBC",
+          "General"
+        ],
+        "disability": false,
+        "student": false
+      },
+      "applyUrl": "https://www.standupmitra.in/",
+      "_id": "scheme_5",
+      "createdAt": "2026-07-07T05:16:14.498Z"
+    },
+    {
+      "title": "Indira Gandhi National Old Age Pension Scheme (IGNOAPS)",
+      "description": "A non-contributory old age pension scheme that provides monthly pension to senior citizens belonging to below poverty line households.",
+      "category": "Pension",
+      "state": "All",
+      "benefits": "Monthly pension of ₹200 for ages 60-79, and ₹500 for senior citizens aged 80 years and above.",
+      "eligibility": {
+        "ageMin": 60,
+        "ageMax": 120,
+        "gender": "All",
+        "incomeMax": 100000,
+        "occupation": [
+          "Retired",
+          "Any"
+        ],
+        "category": [
+          "All"
+        ],
+        "disability": false,
+        "student": false
+      },
+      "applyUrl": "https://nsap.nic.in/",
+      "_id": "scheme_6",
+      "createdAt": "2026-07-07T05:16:14.498Z"
+    },
+    {
+      "title": "Ladli Behna Yojana (Madhya Pradesh)",
+      "description": "State-specific initiative to enhance economic independence of women, improve health and nutrition status and strengthen their role in family decisions.",
+      "category": "Welfare",
+      "state": "Madhya Pradesh",
+      "benefits": "Direct monthly transfer of ₹1,250 to the bank accounts of eligible women in the state.",
+      "eligibility": {
+        "ageMin": 21,
+        "ageMax": 60,
+        "gender": "Female",
+        "incomeMax": 250000,
+        "occupation": [
+          "Any",
+          "Housewife"
+        ],
+        "category": [
+          "All"
+        ],
+        "disability": false,
+        "student": false
+      },
+      "applyUrl": "https://cmladlibahna.mp.gov.in/",
+      "_id": "scheme_7",
+      "createdAt": "2026-07-07T05:16:14.498Z"
+    },
+    {
+      "title": "AICTE Pragati Scholarship for Girl Students",
+      "description": "An initiative to provide assistance and encouragement to meritorious girl students to pursue technical education.",
+      "category": "Education",
+      "state": "All",
+      "benefits": "₹50,000 per annum for every year of study as lump sum amount for college fee, computer purchase, stationery, books, etc.",
+      "eligibility": {
+        "ageMin": 16,
+        "ageMax": 25,
+        "gender": "Female",
+        "incomeMax": 800000,
+        "occupation": [
+          "Any"
+        ],
+        "category": [
+          "All"
+        ],
+        "disability": false,
+        "student": true
+      },
+      "applyUrl": "https://www.aicte-india.org/schemes/students-development-schemes/pragati-scholarship-scheme",
+      "_id": "scheme_8",
+      "createdAt": "2026-07-07T05:16:14.498Z"
+    }
+  ],
+  "documents": [],
+  "notifications": [
+    {
+      "title": "New Agriculture Subsidy for Rabi Crops",
+      "content": "The Ministry of Agriculture has announced a new subsidy of up to 40% on tractor and drip irrigation systems purchase for farmers in Maharashtra and MP.",
+      "state": "All",
+      "category": "Agriculture",
+      "date": "2026-07-07T05:16:14.496Z",
+      "_id": "notif_1",
+      "createdAt": "2026-07-07T05:16:14.498Z"
+    },
+    {
+      "title": "Aadhaar-PAN Linking Deadline Extended",
+      "content": "The Income Tax Department has extended the deadline to link Aadhaar with PAN card to September 30, 2026. Avoid penality by linking online now.",
+      "state": "All",
+      "category": "Services",
+      "date": "2026-07-07T05:16:14.497Z",
+      "_id": "notif_2",
+      "createdAt": "2026-07-07T05:16:14.498Z"
+    },
+    {
+      "title": "UP Scholarship Portal Open for 2026-27 Applications",
+      "content": "Students in Uttar Pradesh can now register for pre-matric and post-matric scholarship programs on the state scholarship website.",
+      "state": "Uttar Pradesh",
+      "category": "Education",
+      "date": "2026-07-07T05:16:14.497Z",
+      "_id": "notif_3",
+      "createdAt": "2026-07-07T05:16:14.498Z"
+    },
+    {
+      "title": "Mega Health Camp in Delhi Municipal Clinics",
+      "content": "Free check-ups, diagnostic services, and medicines will be distributed under the Ayushman campaign at municipal offices across Delhi this weekend.",
+      "state": "Delhi",
+      "category": "Healthcare",
+      "date": "2026-07-07T05:16:14.497Z",
+      "_id": "notif_4",
+      "createdAt": "2026-07-07T05:16:14.498Z"
+    }
+  ],
+  "chatHistory": [
+    {
+      "email": "singhjeet7751@gmail.com",
+      "messages": [
+        {
+          "sender": "user",
+          "text": "how can i apply for a passport",
+          "timestamp": "2026-07-07T05:54:17.354Z"
+        },
+        {
+          "sender": "bot",
+          "text": "### 🛂 Indian Passport Application Guide (English)\n\nHere is the official process to apply for a fresh Indian Passport:\n\n* **Eligibility**: Citizen of India, age 18+ (adult) or minor.\n* **Required Documents**:\n  1. **Address Proof**: Water/Electricity bill, Bank passbook, Aadhaar card, or Rent Agreement.\n  2. **Date of Birth Proof**: Birth Certificate, Matriculation transfer certificate, or PAN Card.\n  3. **Non-ECR Category Proof**: 10th Standard passing certificate.\n* **Fees**: ₹1,500 for normal application (36 pages); ₹3,500 for Tatkaal scheme.\n* **Processing Time**: 15–30 days for Normal; 1–3 days for Tatkaal.\n* **Official Process**:\n  1. Register on the official Passport Seva portal (*passportindia.gov.in*).\n  2. Fill the online form and pay the fee online.\n  3. Book an appointment at your nearest PSK (Passport Seva Kendra) or Post Office PSK.\n  4. Attend the appointment for biometric scanning and document verification.\n  5. Police verification will be conducted at your registered address.\n  6. The passport is delivered via Speed Post.\n* **Tips**: Make sure the spellings on your Aadhaar and 10th certificate match exactly to avoid verification delays.",
+          "timestamp": "2026-07-07T05:54:17.354Z"
+        }
+      ],
+      "createdAt": "2026-07-07T05:54:17.354Z",
+      "_id": "mock_d9adxr8do"
+    }
+  ]
+}

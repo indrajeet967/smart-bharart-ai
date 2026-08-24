@@ -1,0 +1,113 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+@layer base {
+  body {
+    @apply transition-colors duration-300;
+  }
+}
+
+/* Glassmorphism custom classes */
+.glass {
+  background: rgba(255, 255, 255, 0.45);
+  backdrop-filter: blur(12px);
+  -webkit-backdrop-filter: blur(12px);
+  border: 1px solid rgba(255, 255, 255, 0.25);
+}
+
+.dark .glass {
+  background: rgba(19, 59, 118, 0.3);
+  backdrop-filter: blur(12px);
+  -webkit-backdrop-filter: blur(12px);
+  border: 1px solid rgba(255, 255, 255, 0.05);
+}
+
+/* Premium Card Hover Effect */
+.hover-card-trigger {
+  @apply transition-all duration-300 hover:-translate-y-1 hover:shadow-lg;
+}
+
+/* Gradient Background Colors */
+.bg-gradient-saffron-navy {
+  background: linear-gradient(135deg, #FF9933 0%, #133B76 100%);
+}
+
+.bg-gradient-flag {
+  background: linear-gradient(to right, #FF9933 0%, #ffffff 50%, #128807 100%);
+}
+
+/* Custom Scrollbar for modern feel */
+::-webkit-scrollbar {
+  width: 6px;
+  height: 6px;
+}
+
+::-webkit-scrollbar-track {
+  @apply bg-transparent;
+}
+
+::-webkit-scrollbar-thumb {
+  @apply bg-slate-300 rounded-full dark:bg-slate-700;
+}
+
+::-webkit-scrollbar-thumb:hover {
+  @apply bg-slate-400 dark:bg-slate-600;
+}
+
+/* Pulsing AI Typing indicator */
+@keyframes typingPulse {
+  0%, 100% {
+    transform: translateY(0);
+    opacity: 0.5;
+  }
+  50% {
+    transform: translateY(-4px);
+    opacity: 1;
+  }
+}
+
+.typing-dot {
+  animation: typingPulse 1s infinite ease-in-out;
+}
+.typing-dot:nth-child(2) {
+  animation-delay: 0.2s;
+}
+.typing-dot:nth-child(3) {
+  animation-delay: 0.4s;
+}
+
+/* Skeletal Shimmer Effect */
+@keyframes shimmer {
+  100% {
+    transform: translateX(100%);
+  }
+}
+
+.shimmer-effect::after {
+  content: '';
+  position: absolute;
+  top: 0;
+  right: 0;
+  bottom: 0;
+  left: 0;
+  transform: translateX(-100%);
+  background-image: linear-gradient(
+    90deg,
+    rgba(255, 255, 255, 0) 0%,
+    rgba(255, 255, 255, 0.2) 20%,
+    rgba(255, 255, 255, 0.5) 60%,
+    rgba(255, 255, 255, 0) 100%
+  );
+  animation: shimmer 2s infinite;
+}
+
+.dark .shimmer-effect::after {
+  background-image: linear-gradient(
+    90deg,
+    rgba(19, 59, 118, 0) 0%,
+    rgba(19, 59, 118, 0.1) 20%,
+    rgba(19, 59, 118, 0.3) 60%,
+    rgba(19, 59, 118, 0) 100%
+  );
+}
