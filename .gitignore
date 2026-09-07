@@ -1,5 +1,9 @@
 node_modules/
+node_modules - Copy/
 .env
-**/.env
+.env.*
+!.env.example
+
 dist/
 build/
+.vite/
