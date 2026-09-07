@@ -1,31 +1,55 @@
 import React, { useState, useEffect, useRef } from 'react';
+import { useNavigate } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
 import { useLanguage } from '../context/LanguageContext';
-import { Bot, Send, Mic, MicOff, Volume2, Upload, FileText, Sparkles, User, FileUp } from 'lucide-react';
+import { useToast } from '../context/ToastContext';
+import { 
+  Bot, Send, Mic, MicOff, Volume2, Upload, FileText, Sparkles, User, FileUp, 
+  ExternalLink, ArrowRight, ShieldCheck, HelpCircle 
+} from 'lucide-react';
 import axios from 'axios';
+import Card, { CardHeader, CardTitle, CardBody } from '../components/ui/Card';
+import PageHeader from '../components/ui/PageHeader';
+import Button from '../components/ui/Button';
+import Input from '../components/ui/Input';
+import Badge from '../components/ui/Badge';
+import ConfirmationDialog from '../components/ui/ConfirmationDialog';
 
 export default function AiAssistant() {
   const { profile } = useAuth();
   const { language, t } = useLanguage();
+  const toast = useToast();
+  const navigate = useNavigate();
 
   const [messages, setMessages] = useState([
-    { sender: 'bot', text: `Namaste! I am your Smart Bharat AI Civic Companion. Ask me government queries, scheme details, or upload documents to summarize.`, timestamp: new Date() }
+    {
+      sender: 'bot',
+      text: `Namaste! I am your Smart Bharat AI Civic Companion. Ask me questions about schemes, report civic issues, check DigiLocker files, or find nearby government offices.`,
+      actions: [
+        { action: 'REPORT_ISSUE', label: 'Report Civic Issue', path: '/dashboard/report' },
+        { action: 'GOVERNMENT_SCHEMES', label: 'Explore Schemes', path: '/dashboard/schemes' },
+        { action: 'NEARBY_OFFICES', label: 'Nearby Offices', path: '/dashboard/offices' }
+      ],
+      timestamp: new Date()
+    }
   ]);
+
   const [inputText, setInputText] = useState('');
   const [isListening, setIsListening] = useState(false);
   const [loading, setLoading] = useState(false);
-  const [pdfFile, setPdfFile] = useState(null);
-  const [pdfLoading, setPdfLoading] = useState(false);
+  
+  // Pending action for confirmation modal
+  const [pendingAction, setPendingAction] = useState(null);
 
   const chatEndRef = useRef(null);
   const recognitionRef = useRef(null);
 
-  // Scroll to bottom on new messages
+  // Auto scroll to bottom
   useEffect(() => {
     chatEndRef.current?.scrollIntoView({ behavior: 'smooth' });
   }, [messages, loading]);
 
-  // Set up Speech Recognition (HTML5 Web Speech API)
+  // STT Setup
   useEffect(() => {
     const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
     if (SpeechRecognition) {
@@ -33,7 +57,6 @@ export default function AiAssistant() {
       rec.continuous = false;
       rec.interimResults = false;
 
-      // Map active language to speech recognition locale code
       const localeCodes = {
         English: 'en-IN',
         Hindi: 'hi-IN',
@@ -57,308 +80,225 @@ export default function AiAssistant() {
         setIsListening(false);
       };
 
-      rec.onend = () => {
-        setIsListening(false);
-      };
-
+      rec.onend = () => setIsListening(false);
       recognitionRef.current = rec;
     }
   }, [language]);
 
-  // Toggle voice dictation
-  const toggleListening = () => {
+  const toggleMic = () => {
     if (!recognitionRef.current) {
-      alert("Voice Speech Recognition is not supported by your current browser. Please try Google Chrome.");
+      toast.error("Speech recognition is not supported in this browser.");
       return;
     }
 
     if (isListening) {
       recognitionRef.current.stop();
+      setIsListening(false);
     } else {
-      setIsListening(true);
       recognitionRef.current.start();
+      setIsListening(true);
     }
   };
 
-  // Text-To-Speech (TTS)
-  const speakText = (text) => {
-    if ('speechSynthesis' in window) {
-      // Cancel any ongoing speaking
-      window.speechSynthesis.cancel();
-      const utterance = new SpeechSynthesisUtterance(text);
-      
-      const localeCodes = {
-        English: 'en-IN',
-        Hindi: 'hi-IN',
-        Tamil: 'ta-IN',
-        Telugu: 'te-IN',
-        Marathi: 'mr-IN',
-        Bengali: 'bn-IN',
-        Gujarati: 'gu-IN',
-        Punjabi: 'pa-IN'
-      };
-      utterance.lang = localeCodes[language] || 'en-IN';
-      window.speechSynthesis.speak(utterance);
-    } else {
-      alert("Text-To-Speech not supported on this browser.");
+  const handleSpeakText = (text) => {
+    if (!('speechSynthesis' in window)) {
+      toast.error("Text-To-Speech is not supported in your browser.");
+      return;
     }
+    window.speechSynthesis.cancel();
+    const cleanText = text.replace(/[*#_`]/g, '');
+    const utterance = new SpeechSynthesisUtterance(cleanText);
+    utterance.rate = 0.95;
+    window.speechSynthesis.speak(utterance);
   };
 
-  // Submit Text Query to Gemini
-  const handleSend = async (e) => {
+  const handleSendMessage = async (e) => {
     e?.preventDefault();
     if (!inputText.trim()) return;
 
-    const userMessage = { sender: 'user', text: inputText, timestamp: new Date() };
-    setMessages(prev => [...prev, userMessage]);
+    const userQuery = inputText.trim();
     setInputText('');
+
+    const newMessages = [
+      ...messages,
+      { sender: 'user', text: userQuery, timestamp: new Date() }
+    ];
+    setMessages(newMessages);
     setLoading(true);
 
     try {
-      const response = await axios.post('/api/ai/chat', {
-        message: userMessage.text,
-        chatHistory: messages,
-        language: language,
-        email: profile?.email
+      const res = await axios.post('/api/ai/chat', {
+        message: userQuery,
+        email: profile?.email || 'guest@gmail.com',
+        language
       });
 
-      setMessages(prev => [...prev, {
-        sender: 'bot',
-        text: response.data.response,
-        timestamp: new Date()
-      }]);
+      setMessages([
+        ...newMessages,
+        {
+          sender: 'bot',
+          text: res.data.response,
+          actions: res.data.actions || [],
+          timestamp: new Date()
+        }
+      ]);
     } catch (err) {
-      setMessages(prev => [...prev, {
-        sender: 'bot',
-        text: "I am having trouble connecting to the network. Let me check the local rules guide.",
-        timestamp: new Date()
-      }]);
+      console.error(err);
+      toast.error("Failed to connect to AI server.");
+      setMessages([
+        ...newMessages,
+        {
+          sender: 'bot',
+          text: "I am having trouble connecting right now. Please try again shortly.",
+          timestamp: new Date()
+        }
+      ]);
     } finally {
       setLoading(false);
     }
   };
 
-  // Handle PDF Upload & Summarization
-  const handlePdfUpload = async (e) => {
-    const file = e.target.files[0];
-    if (!file) return;
-
-    setPdfLoading(true);
-    const formData = new FormData();
-    formData.append('documentFile', file);
-    formData.append('email', profile?.email || 'guest@gmail.com');
-    formData.append('docType', 'Circular');
-
-    // Add user feedback message in chat
-    setMessages(prev => [...prev, {
-      sender: 'user',
-      text: `📂 Uploaded document: ${file.name} for AI analysis.`,
-      timestamp: new Date()
-    }]);
-
-    try {
-      const res = await axios.post('/api/documents/upload', formData, {
-        headers: { 'Content-Type': 'multipart/form-data' }
-      });
-
-      // Extract results and print in chat bubble
-      const details = res.data.document?.details || {};
-      const responseMsg = `### 📑 Document summary & OCR complete
-- **Document Number / ID**: \`${details.docNumber || 'Not found'}\`
-- **Name Extracted**: *${details.name || 'Not detected'}*
-- **Verification Status**: **${res.data.document?.verificationStatus || 'Completed'}**
-
-**Gemini Analysis Summary:**
-The document upload matches format guidelines. The verified fields are saved under your Digital Locker. Let me know if you would like me to explain standard steps or legal requirements for this document.`;
-
-      setMessages(prev => [...prev, {
-        sender: 'bot',
-        text: responseMsg,
-        timestamp: new Date()
-      }]);
-    } catch (err) {
-      setMessages(prev => [...prev, {
-        sender: 'bot',
-        text: "❌ Failed to analyze PDF. Please verify file format or check Gemini API limits.",
-        timestamp: new Date()
-      }]);
-    } finally {
-      setPdfLoading(false);
-      e.target.value = null; // reset input
+  // Handle action click with confirmation if needed
+  const handleActionClick = (act) => {
+    if (act.requiresConfirmation) {
+      setPendingAction(act);
+    } else if (act.path) {
+      navigate(act.path);
     }
   };
 
-  // Render markdown with basic helper (handles simple bolding, bullets, headings)
-  const formatMarkdown = (txt = '') => {
-    return txt.split('\n').map((line, idx) => {
-      let content = line;
-      let className = "text-sm leading-relaxed my-1";
-
-      if (line.startsWith('###')) {
-        content = line.replace('###', '').trim();
-        className = "text-base font-extrabold text-navy-800 dark:text-saffron-400 mt-3 mb-1 font-outfit";
-      } else if (line.startsWith('**') && line.endsWith('**')) {
-        content = line.replace(/\*\*/g, '').trim();
-        className = "text-sm font-bold mt-2 text-slate-800 dark:text-slate-200";
-      } else if (line.startsWith('*') || line.startsWith('-')) {
-        content = line.replace(/^[\*\-]/, '').trim();
-        className = "text-sm list-item list-inside pl-2 text-slate-600 dark:text-slate-350 ml-2";
-      }
-
-      // Convert inline code tags
-      if (content.includes('`')) {
-        const parts = content.split('`');
-        return (
-          <p key={idx} className={className}>
-            {parts.map((p, pidx) => pidx % 2 === 1 ? <code key={pidx} className="bg-slate-100 dark:bg-navy-950 px-1 py-0.5 rounded text-xs font-mono font-bold text-saffron-600">{p}</code> : p)}
-          </p>
-        );
-      }
-
-      // Inline Bold formatting
-      if (content.includes('**')) {
-        const parts = content.split('**');
-        return (
-          <p key={idx} className={className}>
-            {parts.map((p, pidx) => pidx % 2 === 1 ? <strong key={pidx} className="font-extrabold text-slate-800 dark:text-white">{p}</strong> : p)}
-          </p>
-        );
-      }
-
-      return <p key={idx} className={className}>{content}</p>;
-    });
-  };
-
   return (
-    <div className="h-[80vh] flex flex-col justify-between glass bg-white dark:bg-navy-900 border border-slate-200 dark:border-navy-800 rounded-3xl shadow-lg overflow-hidden animate-fade-in">
+    <div className="space-y-6 animate-fade-in pb-10 max-w-5xl mx-auto flex flex-col h-[calc(100vh-6rem)]">
       
-      {/* Assistant Header */}
-      <div className="px-6 py-4 border-b border-slate-200 dark:border-navy-800 flex justify-between items-center bg-slate-50 dark:bg-navy-950">
-        <div className="flex items-center gap-3">
-          <div className="w-10 h-10 rounded-xl bg-saffron-500 text-white flex items-center justify-center shadow-md shadow-saffron-500/20">
-            <Bot size={20} />
-          </div>
-          <div>
-            <h2 className="text-base font-bold text-navy-800 dark:text-white font-outfit leading-tight flex items-center gap-1.5">
-              Smart Bharat AI Companion
-              <Sparkles size={14} className="text-saffron-500 animate-pulse" />
-            </h2>
-            <p className="text-[10px] text-slate-400 font-semibold tracking-wider uppercase">Languages active: {language}</p>
-          </div>
+      {/* Page Header */}
+      <PageHeader
+        title="Smart Bharat AI Assistant"
+        description="Ask questions about schemes, track complaints, or trigger platform actions in natural language."
+        icon={Bot}
+        badge="Gemini 1.5 Flash Powered"
+      />
+
+      {/* Main Chat Container */}
+      <Card className="flex-1 flex flex-col overflow-hidden p-0 border border-slate-200 dark:border-navy-800">
+        
+        {/* Messages Stream */}
+        <div className="flex-1 overflow-y-auto p-6 space-y-6 bg-slate-50/50 dark:bg-navy-950/30">
+          {messages.map((msg, idx) => {
+            const isUser = msg.sender === 'user';
+            return (
+              <div
+                key={idx}
+                className={`flex gap-3 max-w-3xl ${isUser ? 'ml-auto flex-row-reverse' : 'mr-auto'}`}
+              >
+                {/* Avatar */}
+                <div className={`w-9 h-9 rounded-xl flex items-center justify-center shrink-0 shadow-sm ${
+                  isUser ? 'bg-navy-800 text-white' : 'bg-saffron-500 text-white'
+                }`}>
+                  {isUser ? <User size={18} /> : <Bot size={18} />}
+                </div>
+
+                {/* Bubble */}
+                <div className="space-y-3">
+                  <div className={`p-4 rounded-2xl text-xs leading-relaxed shadow-sm ${
+                    isUser
+                      ? 'bg-navy-800 text-white rounded-tr-none'
+                      : 'glass bg-white dark:bg-navy-900 border border-slate-200 dark:border-navy-800 text-slate-800 dark:text-slate-100 rounded-tl-none'
+                  }`}>
+                    <div className="whitespace-pre-line font-medium">{msg.text}</div>
+                    
+                    {!isUser && (
+                      <button
+                        onClick={() => handleSpeakText(msg.text)}
+                        className="mt-2.5 inline-flex items-center gap-1 text-[10px] font-bold text-saffron-600 dark:text-saffron-400 hover:underline"
+                      >
+                        <Volume2 size={12} /> Read Aloud
+                      </button>
+                    )}
+                  </div>
+
+                  {/* Controlled Navigation Action Buttons */}
+                  {!isUser && msg.actions && msg.actions.length > 0 && (
+                    <div className="flex flex-wrap gap-2 pt-1">
+                      {msg.actions.map((act, aIdx) => (
+                        <Button
+                          key={aIdx}
+                          variant="saffron"
+                          size="sm"
+                          icon={ArrowRight}
+                          iconPosition="right"
+                          onClick={() => handleActionClick(act)}
+                        >
+                          {act.label}
+                        </Button>
+                      ))}
+                    </div>
+                  )}
+                </div>
+              </div>
+            );
+          })}
+
+          {loading && (
+            <div className="flex gap-3 max-w-md mr-auto animate-pulse">
+              <div className="w-9 h-9 rounded-xl bg-saffron-500 text-white flex items-center justify-center shrink-0">
+                <Bot size={18} />
+              </div>
+              <div className="p-4 rounded-2xl glass bg-white dark:bg-navy-900 border border-slate-200 dark:border-navy-800 text-xs font-semibold text-slate-400 flex items-center gap-2">
+                <span className="w-2 h-2 bg-saffron-500 rounded-full animate-ping" /> Smart Bharat AI is thinking...
+              </div>
+            </div>
+          )}
+
+          <div ref={chatEndRef} />
         </div>
 
-        {/* Upload Circular PDF Button */}
-        <label className="p-2 bg-white dark:bg-navy-900 border border-slate-200 dark:border-navy-850 hover:bg-slate-50 dark:hover:bg-navy-850 rounded-xl cursor-pointer text-slate-500 hover:text-saffron-500 transition-colors flex items-center gap-1.5 text-xs font-bold shadow-sm">
-          <FileUp size={16} />
-          <span>Upload PDF</span>
-          <input 
-            type="file" 
-            accept="application/pdf" 
-            className="hidden" 
-            onChange={handlePdfUpload}
-            disabled={pdfLoading}
-          />
-        </label>
-      </div>
+        {/* Input Bar */}
+        <div className="p-4 bg-white dark:bg-navy-900 border-t border-slate-200 dark:border-navy-800">
+          <form onSubmit={handleSendMessage} className="flex items-center gap-3">
+            <button
+              type="button"
+              onClick={toggleMic}
+              className={`p-3 rounded-xl transition-all ${
+                isListening
+                  ? 'bg-red-600 text-white animate-bounce'
+                  : 'bg-slate-100 dark:bg-navy-950 text-slate-500 hover:text-saffron-500'
+              }`}
+              title="Voice Dictation"
+            >
+              {isListening ? <MicOff size={18} /> : <Mic size={18} />}
+            </button>
 
-      {/* Messages Scrolling Container */}
-      <div className="flex-1 p-6 overflow-y-auto space-y-4 bg-slate-50/30 dark:bg-navy-950/20">
-        {messages.map((msg, idx) => (
-          <div 
-            key={idx} 
-            className={`flex items-start gap-3 max-w-[80%] ${
-              msg.sender === 'user' ? 'ml-auto flex-row-reverse' : 'mr-auto'
-            }`}
-          >
-            {/* Avatar */}
-            <div className={`w-8 h-8 rounded-full shrink-0 flex items-center justify-center text-xs font-bold border ${
-              msg.sender === 'user' 
-                ? 'bg-navy-800 text-white border-navy-800' 
-                : 'bg-white dark:bg-navy-900 text-saffron-500 border-slate-200 dark:border-navy-800'
-            }`}>
-              {msg.sender === 'user' ? <User size={14} /> : <Bot size={14} />}
-            </div>
+            <input
+              type="text"
+              value={inputText}
+              onChange={(e) => setInputText(e.target.value)}
+              placeholder="Ask anything (e.g., 'Report a pothole in my area' or 'What is Ayushman Bharat?')..."
+              className="flex-1 py-3 px-4 rounded-xl border border-slate-250 dark:border-navy-800 bg-slate-50 dark:bg-navy-950 text-slate-900 dark:text-slate-100 text-sm focus:outline-none focus:ring-2 focus:ring-saffron-500/50"
+            />
 
-            {/* Bubble */}
-            <div className="space-y-1">
-              <div className={`p-4 rounded-2xl border ${
-                msg.sender === 'user' 
-                  ? 'bg-navy-800 text-white border-navy-800 rounded-tr-none' 
-                  : 'bg-white dark:bg-navy-900 border-slate-200 dark:border-navy-800 rounded-tl-none shadow-sm text-slate-700 dark:text-slate-255'
-              }`}>
-                {msg.sender === 'user' ? (
-                  <p className="text-sm leading-relaxed">{msg.text}</p>
-                ) : (
-                  <div>
-                    {formatMarkdown(msg.text)}
-                    {/* TTS Button on bot messages */}
-                    <button 
-                      onClick={() => speakText(msg.text)}
-                      className="mt-3 p-1.5 rounded-lg border border-slate-200 dark:border-navy-850 hover:bg-slate-50 dark:hover:bg-navy-850 text-slate-400 hover:text-saffron-500 transition-colors flex items-center gap-1 text-[10px] font-bold"
-                    >
-                      <Volume2 size={12} /> Speak Answer ({language})
-                    </button>
-                  </div>
-                )}
-              </div>
-              <p className={`text-[9px] text-slate-400 px-1 ${msg.sender === 'user' ? 'text-right' : 'text-left'}`}>
-                {new Date(msg.timestamp).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
-              </p>
-            </div>
-          </div>
-        ))}
+            <Button variant="saffron" type="submit" isLoading={loading} icon={Send}>
+              Send
+            </Button>
+          </form>
+        </div>
 
-        {/* Typing Loading Indicators */}
-        {(loading || pdfLoading) && (
-          <div className="flex items-start gap-3">
-            <div className="w-8 h-8 rounded-full bg-white dark:bg-navy-900 text-saffron-500 border border-slate-200 dark:border-navy-800 flex items-center justify-center shrink-0">
-              <Bot size={14} />
-            </div>
-            <div className="bg-white dark:bg-navy-900 border border-slate-200 dark:border-navy-800 p-4 rounded-2xl rounded-tl-none flex items-center gap-1 shadow-sm">
-              <span className="w-2.5 h-2.5 bg-slate-300 dark:bg-slate-700 rounded-full typing-dot" />
-              <span className="w-2.5 h-2.5 bg-slate-300 dark:bg-slate-700 rounded-full typing-dot" />
-              <span className="w-2.5 h-2.5 bg-slate-300 dark:bg-slate-700 rounded-full typing-dot" />
-            </div>
-          </div>
-        )}
-        <div ref={chatEndRef} />
-      </div>
+      </Card>
 
-      {/* Input controls form */}
-      <form onSubmit={handleSend} className="p-4 border-t border-slate-200 dark:border-navy-800 bg-slate-50 dark:bg-navy-950 flex gap-2">
-        <input
-          type="text"
-          value={inputText}
-          onChange={(e) => setInputText(e.target.value)}
-          placeholder={`Type government queries in ${language}...`}
-          className="flex-1 px-4 py-2.5 rounded-xl border border-slate-250 dark:border-navy-805 bg-white dark:bg-navy-900 focus:border-saffron-500 focus:outline-none text-sm transition-colors"
-          disabled={loading || pdfLoading}
+      {/* Confirmation Dialog for Action Execution */}
+      {pendingAction && (
+        <ConfirmationDialog
+          isOpen={!!pendingAction}
+          onClose={() => setPendingAction(null)}
+          onConfirm={() => {
+            const p = pendingAction.path;
+            setPendingAction(null);
+            if (p) navigate(p);
+          }}
+          title="Confirm Navigation Action"
+          message={`Are you sure you want to navigate to "${pendingAction.label}"?`}
+          confirmText="Proceed"
         />
-        
-        {/* Dictate dictation voice button */}
-        <button
-          type="button"
-          onClick={toggleListening}
-          className={`p-2.5 rounded-xl border transition-all shrink-0 ${
-            isListening 
-              ? 'bg-red-500 border-red-500 text-white animate-pulse' 
-              : 'bg-white dark:bg-navy-900 border-slate-200 dark:border-navy-805 text-slate-500 hover:text-saffron-500'
-          }`}
-          title="Dictate with voice"
-          disabled={loading || pdfLoading}
-        >
-          {isListening ? <MicOff size={18} /> : <Mic size={18} />}
-        </button>
-
-        {/* Submit query */}
-        <button
-          type="submit"
-          className="p-2.5 bg-navy-800 dark:bg-saffron-500 hover:bg-navy-900 dark:hover:bg-saffron-600 text-white rounded-xl shadow transition-all shrink-0 disabled:opacity-50"
-          disabled={!inputText.trim() || loading || pdfLoading}
-        >
-          <Send size={18} />
-        </button>
-      </form>
+      )}
 
     </div>
   );

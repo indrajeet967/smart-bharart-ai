@@ -7,7 +7,8 @@ const User = require('../models/User');
 
 // GET /api/notifications/:email
 // Retrieve notifications filtered by user state and interests
-router.get('/:email', async (req, res) => {
+router.get('/:email', async (req, res) => { 
+  
   const { email } = req.params;
 
   try {

@@ -1,35 +1,81 @@
 import React, { useState } from 'react';
 import { useAuth } from '../context/AuthContext';
-import { MapPin, Compass, Navigation, Phone, Clock, Landmark, AlertCircle } from 'lucide-react';
+import { useToast } from '../context/ToastContext';
+import { 
+  MapPin, Compass, Navigation, Phone, Clock, Landmark, AlertCircle, 
+  Building2, Shield, Flame, Mail, GraduationCap, Building, PhoneOff 
+} from 'lucide-react';
+import Card, { CardHeader, CardTitle, CardBody } from '../components/ui/Card';
+import PageHeader from '../components/ui/PageHeader';
+import Button from '../components/ui/Button';
+import Badge from '../components/ui/Badge';
+import Alert from '../components/ui/Alert';
+import EmptyState from '../components/ui/EmptyState';
 
 export default function NearbyOffices() {
   const { profile } = useAuth();
-  const [selectedCategory, setSelectedCategory] = useState('Hospital');
+  const toast = useToast();
+
+  const [selectedCategory, setSelectedCategory] = useState('Hospitals');
   const [activeOffice, setActiveOffice] = useState(null);
   const [showDirections, setShowDirections] = useState(false);
+  const [userCoords, setUserCoords] = useState({ lat: 28.6139, lng: 77.2090 });
+  const [locating, setLocating] = useState(false);
 
   const officesData = {
-    Hospital: [
-      { name: 'Dr. Ram Manohar Lohia Hospital', distance: '1.2 km', address: 'Baba Kharak Singh Marg, Connaught Place, New Delhi', tel: '+91-11-23365525', hours: '24 Hours Open', lat: 28.6253, lng: 77.2085, directions: ['Head west on Baba Kharak Singh Marg toward Pandit Pant Marg', 'Turn left after 500m at the roundabout', 'RML Hospital main gate will be on your left'] },
-      { name: 'Lok Nayak Jai Prakash Hospital', distance: '2.5 km', address: 'Jawaharlal Nehru Marg, Near Delhi Gate, Delhi', tel: '+91-11-23232400', hours: '24 Hours Open', lat: 28.6358, lng: 77.2403, directions: ['Head east toward Jawaharlal Nehru Marg', 'Take second exit at Delhi Gate crossing', 'LNJP hospital entrance is on your right'] }
+    Hospitals: [
+      { name: 'Dr. Ram Manohar Lohia Hospital', distance: '1.2 km', address: 'Baba Kharak Singh Marg, Connaught Place, New Delhi', tel: '+911123365525', hours: '24 Hours Open', status: 'Open', lat: 28.6253, lng: 77.2085, directions: ['Head west on Baba Kharak Singh Marg toward Pandit Pant Marg', 'Turn left after 500m at the roundabout', 'RML Hospital main gate will be on your left'] },
+      { name: 'Lok Nayak Jai Prakash Hospital', distance: '2.5 km', address: 'Jawaharlal Nehru Marg, Near Delhi Gate, Delhi', tel: '+911123232400', hours: '24 Hours Open', status: 'Open', lat: 28.6358, lng: 77.2403, directions: ['Head east toward Jawaharlal Nehru Marg', 'Take second exit at Delhi Gate crossing', 'LNJP hospital entrance is on your right'] }
     ],
-    'Police Station': [
-      { name: 'Connaught Place Police Station', distance: '0.8 km', address: 'Radial Road 4, Connaught Place, New Delhi', tel: '+91-11-23340050', hours: '24 Hours Open', lat: 28.6304, lng: 77.2177, directions: ['Walk toward Outer Circle, Connaught Place', 'Take Radial Road 4 heading south', 'CP police station is adjacent to the block post'] },
-      { name: 'Parliament Street Police Station', distance: '1.4 km', address: 'Parliament Street, New Delhi', tel: '+91-11-23361100', hours: '24 Hours Open', lat: 28.6231, lng: 77.2131, directions: ['Head south on Sansad Marg / Parliament Street', 'Cross Patel Chowk traffic junction', 'Police station is next to the post office building'] }
+    'Police Stations': [
+      { name: 'Connaught Place Police Station', distance: '0.8 km', address: 'Radial Road 4, Connaught Place, New Delhi', tel: '+911123340050', hours: '24 Hours Open', status: 'Open', lat: 28.6304, lng: 77.2177, directions: ['Walk toward Outer Circle, Connaught Place', 'Take Radial Road 4 heading south', 'CP police station is adjacent to the block post'] },
+      { name: 'Parliament Street Police Station', distance: '1.4 km', address: 'Parliament Street, New Delhi', tel: '+911123361100', hours: '24 Hours Open', status: 'Open', lat: 28.6231, lng: 77.2131, directions: ['Head south on Sansad Marg / Parliament Street', 'Cross Patel Chowk traffic junction', 'Police station is next to the post office building'] }
     ],
-    'Passport Office': [
-      { name: 'Regional Passport Seva Kendra (PSK)', distance: '3.1 km', address: 'Herald House, Bahadur Shah Zafar Marg, ITO, New Delhi', tel: '1800-258-1800', hours: '9:00 AM - 5:00 PM', lat: 28.6309, lng: 77.2435, directions: ['Take Vikas Marg heading toward ITO crossing', 'Turn left onto Bahadur Shah Zafar Marg', 'PSK is located on the ground floor of Herald House'] }
+    'Fire Stations': [
+      { name: 'Connaught Place Fire Station', distance: '1.0 km', address: 'Connaught Circus, Block M, CP, New Delhi', tel: '101', hours: '24 Hours Open', status: 'Open', lat: 28.6321, lng: 77.2195, directions: ['Head toward Outer Circle Connaught Place Block M', 'Fire station facility is situated next to the metro station exit'] }
     ],
-    'Municipal Office': [
-      { name: 'NDMC Municipal Corporation Headquarters', distance: '1.1 km', address: 'Palika Kendra, Parliament Street, New Delhi', tel: '+91-11-23742781', hours: '9:30 AM - 6:00 PM', lat: 28.6288, lng: 77.2185, directions: ['Walk along Parliament Street toward Regal Building', 'Palika Kendra high rise building will be on your left', 'Enter via Gate 2 for civic enquiries'] }
+    'Post Offices': [
+      { name: 'Eastern Court Head Post Office', distance: '1.5 km', address: 'Janpath, Connaught Place, New Delhi', tel: '+911123321482', hours: '9:00 AM - 6:00 PM', status: 'Open', lat: 28.6245, lng: 77.2188, directions: ['Head south on Janpath Road', 'Cross BSNL Building', 'Eastern Court GPO entrance will be on your left'] }
+    ],
+    'Government Offices': [
+      { name: 'NDMC Municipal Corporation Headquarters', distance: '1.1 km', address: 'Palika Kendra, Parliament Street, New Delhi', tel: '+911123742781', hours: '9:30 AM - 6:00 PM', status: 'Open', lat: 28.6288, lng: 77.2185, directions: ['Walk along Parliament Street toward Regal Building', 'Palika Kendra high rise building will be on your left', 'Enter via Gate 2 for civic enquiries'] },
+      { name: 'Regional Passport Seva Kendra (PSK)', distance: '3.1 km', address: 'Herald House, Bahadur Shah Zafar Marg, ITO, New Delhi', tel: '18002581800', hours: '9:00 AM - 5:00 PM', status: 'Open', lat: 28.6309, lng: 77.2435, directions: ['Take Vikas Marg heading toward ITO crossing', 'Turn left onto Bahadur Shah Zafar Marg', 'PSK is located on the ground floor of Herald House'] }
+    ],
+    'Government Schools': [
+      { name: 'Sarvodaya Kanya Vidyalaya', distance: '1.8 km', address: 'Gole Market, New Delhi', tel: '', hours: '7:30 AM - 1:30 PM', status: 'Closed Now', lat: 28.6291, lng: 77.2045, directions: ['Head west toward Gole Market circle', 'School campus entrance is adjacent to St. Columba\'s'] }
+    ],
+    Banks: [
+      { name: 'State Bank of India (Main Branch)', distance: '0.6 km', address: '11 Sansad Marg, New Delhi', tel: '+911123374211', hours: '10:00 AM - 4:00 PM', status: 'Open', lat: 28.6275, lng: 77.2150, directions: ['Walk along Parliament Street', 'SBI main heritage building will be on the right'] }
     ]
   };
 
-  const categories = ['Hospital', 'Police Station', 'Passport Office', 'Municipal Office'];
+  const categories = [
+    { name: 'Hospitals', icon: Building2 },
+    { name: 'Police Stations', icon: Shield },
+    { name: 'Fire Stations', icon: Flame },
+    { name: 'Post Offices', icon: Mail },
+    { name: 'Government Offices', icon: Landmark },
+    { name: 'Government Schools', icon: GraduationCap },
+    { name: 'Banks', icon: Building }
+  ];
 
-  const handleOfficeSelect = (office) => {
-    setActiveOffice(office);
-    setShowDirections(false);
+  const detectLocation = () => {
+    if (!navigator.geolocation) {
+      toast.error("Geolocation not supported by browser.");
+      return;
+    }
+    setLocating(true);
+    navigator.geolocation.getCurrentPosition(
+      (pos) => {
+        setUserCoords({ lat: pos.coords.latitude, lng: pos.coords.longitude });
+        setLocating(false);
+        toast.success("Location updated successfully!");
+      },
+      (err) => {
+        setLocating(false);
+        toast.info("Using default Delhi sector location.");
+      }
+    );
   };
 
   const list = officesData[selectedCategory] || [];
@@ -37,150 +83,192 @@ export default function NearbyOffices() {
   return (
     <div className="space-y-8 animate-fade-in pb-12">
       
-      {/* Header */}
-      <div>
-        <h1 className="text-3xl font-extrabold font-outfit text-navy-800 dark:text-white flex items-center gap-2">
-          <MapPin className="text-saffron-500" />
-          Nearby Civic Offices & Navigation
-        </h1>
-        <p className="text-sm text-slate-500 dark:text-slate-400 mt-1.5">
-          Select office types below to find nearby police departments, passport kendras, hospitals, or municipality offices. Includes step-by-step route directions.
-        </p>
-      </div>
+      {/* Page Header */}
+      <PageHeader
+        title="Nearby Government Offices & Maps"
+        description="Find verified emergency services, police stations, municipality offices, and passport kendras near your current location."
+        icon={MapPin}
+        actions={
+          <Button variant="outline" size="sm" onClick={detectLocation} isLoading={locating} icon={Compass}>
+            Update My Location
+          </Button>
+        }
+      />
 
-      {/* Categories Toggle buttons */}
+      {/* Category Pills Bar */}
       <div className="flex flex-wrap gap-2.5">
-        {categories.map((cat) => (
-          <button
-            key={cat}
-            onClick={() => {
-              setSelectedCategory(cat);
-              setActiveOffice(null);
-              setShowDirections(false);
-            }}
-            className={`px-4 py-2 rounded-xl text-xs font-bold transition-all border ${
-              selectedCategory === cat
-                ? 'bg-navy-800 dark:bg-saffron-500 text-white border-navy-800 dark:border-saffron-500 shadow-md'
-                : 'bg-white dark:bg-navy-900 border-slate-200 dark:border-navy-850 text-slate-650 hover:bg-slate-50'
-            }`}
-          >
-            {cat}
-          </button>
-        ))}
+        {categories.map((cat) => {
+          const Icon = cat.icon;
+          const isSelected = selectedCategory === cat.name;
+          return (
+            <button
+              key={cat.name}
+              onClick={() => {
+                setSelectedCategory(cat.name);
+                setActiveOffice(null);
+                setShowDirections(false);
+              }}
+              className={`px-4 py-2.5 rounded-xl text-xs font-bold transition-all duration-200 flex items-center gap-2 border ${
+                isSelected
+                  ? 'bg-saffron-500 text-white border-saffron-500 shadow-md'
+                  : 'bg-white dark:bg-navy-900 text-slate-700 dark:text-slate-300 border-slate-200 dark:border-navy-800 hover:bg-slate-50 dark:hover:bg-navy-850'
+              }`}
+            >
+              <Icon size={16} />
+              <span>{cat.name}</span>
+            </button>
+          );
+        })}
       </div>
 
+      {/* Map & Office Listing Split View */}
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
         
-        {/* Office list (1 column) */}
-        <div className="lg:col-span-1 space-y-4">
-          <h3 className="text-base font-bold font-outfit text-navy-800 dark:text-white border-b border-slate-100 dark:border-navy-850 pb-2">
-            Centers Found ({list.length})
-          </h3>
-
-          <div className="space-y-4">
-            {list.map((office, idx) => (
-              <div
-                key={idx}
-                onClick={() => handleOfficeSelect(office)}
-                className={`p-4 rounded-xl border cursor-pointer transition-all flex flex-col justify-between ${
-                  activeOffice?.name === office.name
-                    ? 'border-saffron-500 bg-saffron-500/5 shadow-md shadow-saffron-500/5'
-                    : 'border-slate-200 dark:border-navy-800 bg-white dark:bg-navy-900 hover:border-slate-300'
-                }`}
-              >
-                <div className="space-y-1 text-xs">
-                  <h4 className="font-bold text-navy-800 dark:text-white">{office.name}</h4>
-                  <p className="text-slate-400 font-semibold flex items-center gap-1"><Compass size={12} /> Distance: {office.distance}</p>
-                  <p className="text-slate-500 dark:text-slate-350 leading-relaxed font-semibold">{office.address}</p>
-                </div>
-                <div className="mt-3 flex justify-between items-center text-[10px] font-bold text-slate-450 uppercase border-t border-slate-100 dark:border-navy-850 pt-2.5">
-                  <span className="text-emerald-600 flex items-center gap-0.5"><Clock size={10} /> {office.hours}</span>
-                  <span className="text-saffron-500 flex items-center gap-0.5"><Navigation size={10} /> Get Directions</span>
-                </div>
-              </div>
-            ))}
-          </div>
-        </div>
-
-        {/* Visual Map Fallback & directions (Right 2 columns) */}
-        <div className="lg:col-span-2 space-y-6">
-          {activeOffice ? (
-            <div className="space-y-6">
-              
-              {/* Mock map renderer (interactive visual) */}
-              <div className="relative h-80 rounded-2xl border border-slate-200 dark:border-navy-800 overflow-hidden bg-slate-100 dark:bg-navy-950 flex flex-col justify-between p-6">
-                
-                {/* Simulated Map Grid Background */}
-                <div className="absolute inset-0 bg-slate-200 dark:bg-navy-950/40 bg-grid-pattern opacity-40 pointer-events-none" />
-                
-                {/* Points on map */}
-                <div className="absolute top-1/2 left-1/3 flex flex-col items-center">
-                  <span className="text-2xl animate-pulse">🔵</span>
-                  <span className="bg-navy-800 text-white font-bold text-[9px] px-1.5 py-0.5 rounded shadow mt-1">My Location</span>
-                </div>
-
-                <div className="absolute top-1/3 left-2/3 flex flex-col items-center">
-                  <span className="text-2xl animate-bounce">📍</span>
-                  <span className="bg-saffron-500 text-white font-bold text-[9px] px-1.5 py-0.5 rounded shadow mt-1">{activeOffice.name}</span>
-                </div>
-
-                {/* Map Directions path overlay */}
-                <svg className="absolute inset-0 w-full h-full pointer-events-none">
-                  <path 
-                    d="M 280 180 L 320 180 L 320 120 L 520 120 L 520 100" 
-                    fill="none" 
-                    stroke="#FF9933" 
-                    strokeWidth="3.5" 
-                    strokeDasharray="6" 
-                    className="animate-dash" 
-                  />
-                </svg>
-
-                <div className="z-10 bg-white/95 dark:bg-navy-900/95 p-4 rounded-xl border border-slate-200 dark:border-navy-800 shadow-lg w-72 text-xs">
-                  <h4 className="font-extrabold text-navy-850 dark:text-white leading-snug">{activeOffice.name}</h4>
-                  <p className="text-[10px] text-slate-400 mt-0.5">{activeOffice.address}</p>
-                  <div className="mt-2.5 pt-2 border-t border-slate-100 dark:border-navy-850 flex gap-4 text-slate-500 font-bold">
-                    <a href={`tel:${activeOffice.tel}`} className="flex items-center gap-1 hover:text-saffron-500"><Phone size={12} /> Call</a>
-                    <button 
-                      onClick={() => setShowDirections(!showDirections)}
-                      className="flex items-center gap-1 text-saffron-600 hover:underline"
-                    >
-                      <Navigation size={12} /> Route Directions
-                    </button>
-                  </div>
-                </div>
-
-                <p className="z-10 ml-auto bg-navy-800 text-white font-extrabold px-3 py-1 rounded-full text-[10px] border border-white/10 shadow uppercase tracking-wider">
-                  Coordinates: {activeOffice.lat.toFixed(4)}N, {activeOffice.lng.toFixed(4)}E
-                </p>
-              </div>
-
-              {/* Turn-by-turn Directions path */}
-              {showDirections && (
-                <div className="p-6 rounded-2xl glass bg-white dark:bg-navy-900 border border-slate-200 dark:border-navy-800 shadow-sm space-y-4 animate-scale-up">
-                  <h4 className="text-sm font-bold font-outfit text-navy-800 dark:text-white flex items-center gap-1.5">
-                    🗺️ Turn-by-Turn Navigation Guide
-                  </h4>
-                  <div className="space-y-3 pl-4 relative border-l border-slate-200 dark:border-navy-850 text-xs font-semibold text-slate-600 dark:text-slate-350">
-                    {activeOffice.directions.map((step, sidx) => (
-                      <div key={sidx} className="relative py-0.5">
-                        <span className="absolute -left-[21px] top-1 w-2.5 h-2.5 rounded-full bg-saffron-500" />
-                        <p>{step}</p>
-                      </div>
-                    ))}
-                  </div>
-                </div>
-              )}
-
-            </div>
+        {/* Office List Cards (Left 2 Columns) */}
+        <div className="lg:col-span-2 space-y-4">
+          {list.length === 0 ? (
+            <EmptyState
+              icon={Building}
+              title="No Facilities Found"
+              description={`There are no registered ${selectedCategory} in this immediate range.`}
+            />
           ) : (
-            <div className="h-80 rounded-2xl border border-slate-200 dark:border-navy-800 bg-white dark:bg-navy-900 flex flex-col items-center justify-center text-center p-8 space-y-3">
-              <span className="text-4xl animate-bounce">🗺️</span>
-              <h3 className="text-base font-bold text-navy-800 dark:text-white">Locator Map Uninitialized</h3>
-              <p className="text-xs text-slate-400 max-w-sm">Select one of the government departments or healthcare centers on the left to verify coordinates and compute route steps.</p>
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+              {list.map((office, idx) => (
+                <Card
+                  key={idx}
+                  hoverable
+                  onClick={() => {
+                    setActiveOffice(office);
+                    setShowDirections(false);
+                  }}
+                  className={`p-5 space-y-3 flex flex-col justify-between ${
+                    activeOffice?.name === office.name ? 'border-2 border-saffron-500 bg-saffron-500/5' : ''
+                  }`}
+                >
+                  <div className="space-y-1.5">
+                    <div className="flex justify-between items-start">
+                      <h4 className="text-sm font-bold text-navy-800 dark:text-white leading-snug">{office.name}</h4>
+                      <Badge variant={office.status === 'Open' ? 'success' : 'neutral'} size="sm">
+                        {office.status}
+                      </Badge>
+                    </div>
+                    <p className="text-xs text-slate-500 dark:text-slate-400 line-clamp-2">{office.address}</p>
+                  </div>
+
+                  <div className="pt-3 border-t border-slate-150 dark:border-navy-800 flex items-center justify-between">
+                    <span className="text-[11px] font-bold text-saffron-600 dark:text-saffron-400 flex items-center gap-1">
+                      <Compass size={14} /> {office.distance}
+                    </span>
+
+                    <div className="flex items-center gap-2">
+                      {office.tel ? (
+                        <a href={`tel:${office.tel}`} onClick={(e) => e.stopPropagation()}>
+                          <Button variant="saffron" size="sm" icon={Phone}>
+                            Call
+                          </Button>
+                        </a>
+                      ) : (
+                        <Button variant="ghost" size="sm" isDisabled icon={PhoneOff}>
+                          Call
+                        </Button>
+                      )}
+
+                      <a
+                        href={`https://www.google.com/maps/dir/?api=1&destination=${office.lat},${office.lng}`}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        onClick={(e) => e.stopPropagation()}
+                      >
+                        <Button variant="outline" size="sm" icon={Navigation}>
+                          Directions
+                        </Button>
+                      </a>
+                    </div>
+                  </div>
+                </Card>
+              ))}
             </div>
           )}
         </div>
+
+        {/* Selected Facility Details Panel (Right 1 Column) */}
+        <Card className="lg:col-span-1 space-y-4">
+          <CardHeader>
+            <CardTitle icon={Landmark}>Facility Details</CardTitle>
+          </CardHeader>
+
+          <CardBody>
+            {activeOffice ? (
+              <div className="space-y-4 text-xs">
+                <h3 className="text-base font-bold text-navy-800 dark:text-white font-outfit">{activeOffice.name}</h3>
+                
+                <div>
+                  <span className="text-slate-400 font-bold uppercase tracking-wider block text-[10px]">Address</span>
+                  <p className="text-slate-700 dark:text-slate-200 mt-0.5">{activeOffice.address}</p>
+                </div>
+
+                <div>
+                  <span className="text-slate-400 font-bold uppercase tracking-wider block text-[10px]">Operating Hours</span>
+                  <p className="text-slate-700 dark:text-slate-200 mt-0.5 flex items-center gap-1 font-semibold">
+                    <Clock size={14} className="text-saffron-500" /> {activeOffice.hours}
+                  </p>
+                </div>
+
+                <div>
+                  <span className="text-slate-400 font-bold uppercase tracking-wider block text-[10px]">Contact Helpline</span>
+                  {activeOffice.tel ? (
+                    <a href={`tel:${activeOffice.tel}`} className="text-saffron-600 dark:text-saffron-400 font-bold text-sm hover:underline block mt-0.5">
+                      {activeOffice.tel}
+                    </a>
+                  ) : (
+                    <span className="text-slate-400 italic mt-0.5 block">No direct phone listed</span>
+                  )}
+                </div>
+
+                {/* Step-by-Step Directions */}
+                <div className="pt-3 border-t border-slate-150 dark:border-navy-800 space-y-2">
+                  <div className="flex justify-between items-center">
+                    <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wider">Step-by-Step Route</span>
+                    <button
+                      onClick={() => setShowDirections(!showDirections)}
+                      className="text-saffron-500 hover:underline font-bold text-[11px]"
+                    >
+                      {showDirections ? 'Hide Route' : 'Show Route'}
+                    </button>
+                  </div>
+
+                  {showDirections && (
+                    <ol className="list-decimal pl-4 space-y-1.5 text-slate-600 dark:text-slate-300 text-[11px] leading-relaxed">
+                      {activeOffice.directions.map((step, i) => (
+                        <li key={i}>{step}</li>
+                      ))}
+                    </ol>
+                  )}
+                </div>
+
+                <div className="pt-2">
+                  <a
+                    href={`https://www.google.com/maps/dir/?api=1&destination=${activeOffice.lat},${activeOffice.lng}`}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="block"
+                  >
+                    <Button variant="saffron" className="w-full" icon={Navigation}>
+                      Open Driving Directions
+                    </Button>
+                  </a>
+                </div>
+
+              </div>
+            ) : (
+              <div className="text-center py-8 text-slate-400 text-xs space-y-1">
+                <Compass size={32} className="mx-auto mb-2 text-slate-300" />
+                <p className="font-semibold">Select any facility on the left to view opening hours, verified contact numbers, and turn-by-turn route directions.</p>
+              </div>
+            )}
+          </CardBody>
+        </Card>
 
       </div>
 

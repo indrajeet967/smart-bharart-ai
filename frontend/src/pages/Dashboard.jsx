@@ -1,9 +1,17 @@
 import React, { useState, useEffect } from 'react';
 import { useAuth } from '../context/AuthContext';
 import { useLanguage } from '../context/LanguageContext';
-import { AlertCircle, ArrowUpRight, Award, Bell, ClipboardList, BookOpen, ChevronRight, Activity, Globe, WifiOff } from 'lucide-react';
+import { 
+  AlertCircle, ArrowUpRight, Award, Bell, ClipboardList, BookOpen, ChevronRight, 
+  Activity, Lock, MapPin, ShieldAlert, Bot, WifiOff, FileText 
+} from 'lucide-react';
 import { Link } from 'react-router-dom';
 import axios from 'axios';
+import Card, { CardHeader, CardTitle, CardBody } from '../components/ui/Card';
+import Badge from '../components/ui/Badge';
+import StatusBadge from '../components/ui/StatusBadge';
+import PageHeader from '../components/ui/PageHeader';
+import Button from '../components/ui/Button';
 import { CardSkeleton } from '../components/Skeleton';
 
 export default function Dashboard() {
@@ -11,6 +19,7 @@ export default function Dashboard() {
   const { t } = useLanguage();
 
   const [complaintsCount, setComplaintsCount] = useState(0);
+  const [documentsCount, setDocumentsCount] = useState(0);
   const [recentComplaints, setRecentComplaints] = useState([]);
   const [schemesCount, setSchemesCount] = useState(0);
   const [notifCount, setNotifCount] = useState(0);
@@ -36,11 +45,15 @@ export default function Dashboard() {
         setLoading(true);
         // 1. Fetch complaints
         const compRes = await axios.get(`/api/complaints/user/${profile.email}`);
-        setRecentComplaints(compRes.data.slice(0, 3));
-        const pending = compRes.data.filter(c => c.status !== 'Resolved').length;
+        setRecentComplaints(compRes.data.slice(0, 4));
+        const pending = compRes.data.filter(c => c.status !== 'Resolved' && c.status !== 'Closed').length;
         setComplaintsCount(pending);
 
-        // 2. Fetch schemes count
+        // 2. Fetch documents count
+        const docRes = await axios.get(`/api/documents/user/${profile.email}`);
+        setDocumentsCount(docRes.data?.length || 0);
+
+        // 3. Fetch schemes count
         const schemeRes = await axios.post('/api/schemes/recommend', {
           age: 25,
           gender: profile.gender || 'All',
@@ -50,13 +63,13 @@ export default function Dashboard() {
         });
         setSchemesCount(schemeRes.data.eligibleSchemes?.length || 0);
 
-        // 3. Fetch notifications
+        // 4. Fetch notifications
         const notifRes = await axios.get(`/api/notifications/${profile.email}`);
         setNotifCount(notifRes.data.length);
       } catch (err) {
-        console.warn("Failed to fetch dashboard data dynamically, using mock placeholders.");
-        // Fallback counters
-        setComplaintsCount(2);
+        console.warn("Failed to fetch dashboard data dynamically, using fallback placeholders.");
+        setComplaintsCount(1);
+        setDocumentsCount(2);
         setSchemesCount(4);
         setNotifCount(3);
       } finally {
@@ -93,106 +106,88 @@ export default function Dashboard() {
       )}
 
       {/* Header Banner */}
-      <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4">
-        <div>
-          <h1 className="text-3xl font-extrabold font-outfit text-navy-800 dark:text-white flex items-center gap-2">
-            {t('welcomeCitizen')}, {profile?.displayName || 'Citizen'} 🇮🇳
-          </h1>
-          <p className="text-sm text-slate-500 dark:text-slate-400 mt-1.5">
-            State Residence: <span className="font-bold text-slate-700 dark:text-slate-200">{profile?.state || 'Not Set (Default: Delhi)'}</span>
-          </p>
-        </div>
-        <div className="flex gap-2">
-          <span className="px-3 py-1 bg-saffron-500/10 text-saffron-600 dark:text-saffron-400 text-xs font-bold rounded-full border border-saffron-500/20">
-            Active Profile
-          </span>
-          {profile?.role === 'admin' && (
-            <span className="px-3 py-1 bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 text-xs font-bold rounded-full border border-emerald-500/20">
-              System Admin
-            </span>
-          )}
-        </div>
-      </div>
+      <PageHeader
+        title={`${t('welcomeCitizen')}, ${profile?.displayName || 'Citizen'} 🇮🇳`}
+        description={`Jurisdiction State: ${profile?.state || 'Delhi (Default)'} • Account Role: ${profile?.role === 'admin' ? 'Administrator' : 'Verified Citizen'}`}
+        badge={profile?.role === 'admin' ? 'System Admin' : 'Verified Citizen'}
+      />
 
-      {/* Overview Cards Grid */}
-      <div className="grid grid-cols-1 md:grid-cols-4 gap-6">
+      {/* Overview Metric Cards Grid */}
+      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-6">
         
         {/* Card 1: Pending Complaints */}
-        <Link 
-          to="/dashboard/track" 
-          className="p-6 rounded-2xl glass hover-card-trigger bg-white dark:bg-navy-900 border border-slate-200 dark:border-navy-800 flex flex-col justify-between"
-        >
-          <div className="flex justify-between items-start">
-            <span className="text-xs font-bold text-slate-400 uppercase tracking-wider">{t('pendingComplaints')}</span>
-            <span className="p-2 rounded-xl bg-saffron-100 dark:bg-saffron-500/15 text-saffron-600 dark:text-saffron-400">
-              <ClipboardList size={18} />
-            </span>
-          </div>
-          <div className="mt-4">
-            <h3 className="text-3xl font-extrabold font-outfit text-navy-800 dark:text-white">{complaintsCount}</h3>
-            <p className="text-xs text-slate-500 dark:text-slate-400 mt-1 flex items-center gap-0.5 hover:text-saffron-500">
-              Track issues online <ArrowUpRight size={12} />
-            </p>
-          </div>
+        <Link to="/dashboard/track">
+          <Card hoverable className="h-full flex flex-col justify-between">
+            <div className="flex justify-between items-start">
+              <span className="text-xs font-bold text-slate-400 uppercase tracking-wider">{t('pendingComplaints')}</span>
+              <span className="p-2 rounded-xl bg-saffron-100 dark:bg-saffron-500/15 text-saffron-600 dark:text-saffron-400">
+                <ClipboardList size={18} />
+              </span>
+            </div>
+            <div className="mt-4">
+              <h3 className="text-3xl font-extrabold font-outfit text-navy-800 dark:text-white">{complaintsCount}</h3>
+              <p className="text-xs text-slate-500 dark:text-slate-400 mt-1 flex items-center gap-0.5 hover:text-saffron-500 font-semibold">
+                Track status online <ArrowUpRight size={12} />
+              </p>
+            </div>
+          </Card>
         </Link>
 
         {/* Card 2: Eligible Schemes */}
-        <Link 
-          to="/dashboard/schemes" 
-          className="p-6 rounded-2xl glass hover-card-trigger bg-white dark:bg-navy-900 border border-slate-200 dark:border-navy-800 flex flex-col justify-between"
-        >
-          <div className="flex justify-between items-start">
-            <span className="text-xs font-bold text-slate-400 uppercase tracking-wider">{t('eligibleSchemes')}</span>
-            <span className="p-2 rounded-xl bg-navy-100 dark:bg-navy-800 text-navy-800 dark:text-slate-200">
-              <BookOpen size={18} />
-            </span>
-          </div>
-          <div className="mt-4">
-            <h3 className="text-3xl font-extrabold font-outfit text-navy-800 dark:text-white">{schemesCount}</h3>
-            <p className="text-xs text-slate-500 dark:text-slate-400 mt-1 flex items-center gap-0.5 hover:text-saffron-500">
-              View matches <ArrowUpRight size={12} />
-            </p>
-          </div>
+        <Link to="/dashboard/schemes">
+          <Card hoverable className="h-full flex flex-col justify-between">
+            <div className="flex justify-between items-start">
+              <span className="text-xs font-bold text-slate-400 uppercase tracking-wider">{t('eligibleSchemes')}</span>
+              <span className="p-2 rounded-xl bg-navy-100 dark:bg-navy-800 text-navy-800 dark:text-slate-200">
+                <BookOpen size={18} />
+              </span>
+            </div>
+            <div className="mt-4">
+              <h3 className="text-3xl font-extrabold font-outfit text-navy-800 dark:text-white">{schemesCount}</h3>
+              <p className="text-xs text-slate-500 dark:text-slate-400 mt-1 flex items-center gap-0.5 hover:text-saffron-500 font-semibold">
+                Explore programs <ArrowUpRight size={12} />
+              </p>
+            </div>
+          </Card>
         </Link>
 
-        {/* Card 3: Reward Points */}
-        <Link 
-          to="/dashboard/profile" 
-          className="p-6 rounded-2xl glass hover-card-trigger bg-white dark:bg-navy-900 border border-slate-200 dark:border-navy-800 flex flex-col justify-between"
-        >
-          <div className="flex justify-between items-start">
-            <span className="text-xs font-bold text-slate-400 uppercase tracking-wider">{t('rewardPoints')}</span>
-            <span className="p-2 rounded-xl bg-emerald-100 dark:bg-emerald-500/10 text-emerald-600 dark:text-emerald-400">
-              <Award size={18} />
-            </span>
-          </div>
-          <div className="mt-4">
-            <h3 className="text-3xl font-extrabold font-outfit text-navy-800 dark:text-white">
-              {profile?.rewardPoints || 0} <span className="text-xs font-semibold text-slate-400">pts</span>
-            </h3>
-            <p className="text-[10px] text-slate-500 dark:text-slate-400 mt-1 font-semibold uppercase tracking-wider flex items-center gap-1">
-              🏆 Badge: {profile?.badges?.[0] || 'Civic Starter'}
-            </p>
-          </div>
+        {/* Card 3: Stored Documents */}
+        <Link to="/dashboard/locker">
+          <Card hoverable className="h-full flex flex-col justify-between">
+            <div className="flex justify-between items-start">
+              <span className="text-xs font-bold text-slate-400 uppercase tracking-wider">DigiLocker Files</span>
+              <span className="p-2 rounded-xl bg-teal-100 dark:bg-teal-500/10 text-teal-600 dark:text-teal-400">
+                <Lock size={18} />
+              </span>
+            </div>
+            <div className="mt-4">
+              <h3 className="text-3xl font-extrabold font-outfit text-navy-800 dark:text-white">{documentsCount}</h3>
+              <p className="text-xs text-slate-500 dark:text-slate-400 mt-1 flex items-center gap-0.5 hover:text-saffron-500 font-semibold">
+                Manage credentials <ArrowUpRight size={12} />
+              </p>
+            </div>
+          </Card>
         </Link>
 
-        {/* Card 4: Personalized Notifications */}
-        <div 
-          className="p-6 rounded-2xl glass bg-white dark:bg-navy-900 border border-slate-200 dark:border-navy-800 flex flex-col justify-between cursor-default"
-        >
-          <div className="flex justify-between items-start">
-            <span className="text-xs font-bold text-slate-400 uppercase tracking-wider">{t('notifications')}</span>
-            <span className="p-2 rounded-xl bg-purple-100 dark:bg-purple-500/10 text-purple-600 dark:text-purple-400">
-              <Bell size={18} />
-            </span>
-          </div>
-          <div className="mt-4">
-            <h3 className="text-3xl font-extrabold font-outfit text-navy-800 dark:text-white">{notifCount}</h3>
-            <p className="text-xs text-slate-500 dark:text-slate-400 mt-1">
-              Personalized for your interests
-            </p>
-          </div>
-        </div>
+        {/* Card 4: Civic Points & Badges */}
+        <Link to="/dashboard/profile">
+          <Card hoverable className="h-full flex flex-col justify-between">
+            <div className="flex justify-between items-start">
+              <span className="text-xs font-bold text-slate-400 uppercase tracking-wider">{t('rewardPoints')}</span>
+              <span className="p-2 rounded-xl bg-emerald-100 dark:bg-emerald-500/10 text-emerald-600 dark:text-emerald-400">
+                <Award size={18} />
+              </span>
+            </div>
+            <div className="mt-4">
+              <h3 className="text-3xl font-extrabold font-outfit text-navy-800 dark:text-white">
+                {profile?.rewardPoints || 0} <span className="text-xs font-semibold text-slate-400">pts</span>
+              </h3>
+              <p className="text-[10px] text-slate-500 dark:text-slate-400 mt-1 font-semibold uppercase tracking-wider flex items-center gap-1">
+                🏆 Badge: {profile?.badges?.[0] || 'Civic Starter'}
+              </p>
+            </div>
+          </Card>
+        </Link>
 
       </div>
 
@@ -200,97 +195,121 @@ export default function Dashboard() {
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
         
         {/* Recent Complaints Listing (Left 2 columns) */}
-        <div className="lg:col-span-2 glass bg-white dark:bg-navy-900 border border-slate-200 dark:border-navy-800 rounded-2xl shadow-sm p-6 space-y-6">
-          <div className="flex justify-between items-center">
-            <h3 className="text-lg font-bold font-outfit text-navy-800 dark:text-white flex items-center gap-2">
-              <Activity size={18} className="text-saffron-500" />
-              Recent Complaint Activity
-            </h3>
+        <Card className="lg:col-span-2 space-y-4">
+          <CardHeader>
+            <CardTitle icon={Activity}>Recent Complaints Activity</CardTitle>
             <Link to="/dashboard/track" className="text-xs font-bold text-saffron-500 dark:text-saffron-400 flex items-center gap-0.5 hover:underline">
-              View All <ChevronRight size={14} />
+              View All Trackers <ChevronRight size={14} />
             </Link>
-          </div>
+          </CardHeader>
 
-          <div className="divide-y divide-slate-100 dark:divide-navy-850">
-            {recentComplaints.length === 0 ? (
-              <div className="text-center py-10 space-y-2">
-                <p className="text-sm text-slate-400 font-semibold">No complaints reported yet.</p>
-                <Link to="/dashboard/report" className="text-xs font-bold text-saffron-500 dark:text-saffron-400 underline">
-                  Report your first issue
-                </Link>
-              </div>
-            ) : (
-              recentComplaints.map((comp) => (
-                <div key={comp._id} className="py-4 flex justify-between items-center gap-4">
-                  <div className="space-y-1">
-                    <div className="flex items-center gap-2">
-                      <span className="text-sm font-bold text-navy-800 dark:text-white font-mono">{comp.complaintId}</span>
-                      <span className={`text-[9px] font-bold px-2 py-0.5 rounded-full ${
-                        comp.priority === 'High' ? 'bg-red-50 dark:bg-red-500/10 text-red-700 dark:text-red-400 border border-red-200/50' :
-                        comp.priority === 'Medium' ? 'bg-amber-50 dark:bg-amber-500/10 text-amber-700 dark:text-amber-400 border border-amber-200/50' :
-                        'bg-blue-50 dark:bg-blue-500/10 text-blue-700 dark:text-blue-400 border border-blue-200/50'
-                      }`}>
-                        {comp.priority} Priority
-                      </span>
-                    </div>
-                    <p className="text-xs text-slate-500 dark:text-slate-400 truncate max-w-sm">{comp.description}</p>
-                    <p className="text-[10px] text-slate-400">{t('reportedOn')}: {new Date(comp.createdAt).toLocaleDateString()}</p>
-                  </div>
-                  <div>
-                    <span className={`text-xs font-bold px-2.5 py-1 rounded-full ${
-                      comp.status === 'Resolved' ? 'bg-emerald-50 dark:bg-emerald-500/10 text-emerald-700 dark:text-emerald-400 border border-emerald-200/50' :
-                      comp.status === 'In Progress' ? 'bg-blue-50 dark:bg-blue-500/10 text-blue-700 dark:text-blue-400 border border-blue-200/50' :
-                      comp.status === 'Assigned' ? 'bg-purple-50 dark:bg-purple-500/10 text-purple-700 dark:text-purple-400 border border-purple-200/50' :
-                      'bg-slate-50 dark:bg-slate-500/10 text-slate-700 dark:text-slate-400 border border-slate-200/50'
-                    }`}>
-                      {comp.status}
-                    </span>
-                  </div>
+          <CardBody>
+            <div className="divide-y divide-slate-100 dark:divide-navy-850">
+              {recentComplaints.length === 0 ? (
+                <div className="text-center py-10 space-y-2">
+                  <p className="text-sm text-slate-400 font-semibold">No complaints reported yet.</p>
+                  <Link to="/dashboard/report" className="text-xs font-bold text-saffron-500 dark:text-saffron-400 underline">
+                    Report your first issue
+                  </Link>
                 </div>
-              ))
-            )}
-          </div>
-        </div>
+              ) : (
+                recentComplaints.map((comp) => (
+                  <div key={comp._id} className="py-3.5 flex justify-between items-center gap-4">
+                    <div className="space-y-1">
+                      <div className="flex items-center gap-2">
+                        <span className="text-xs font-bold text-navy-800 dark:text-white font-mono">{comp.complaintId}</span>
+                        <Badge 
+                          variant={comp.priority === 'High' ? 'danger' : comp.priority === 'Medium' ? 'warning' : 'info'}
+                          size="sm"
+                        >
+                          {comp.priority}
+                        </Badge>
+                      </div>
+                      <p className="text-xs text-slate-600 dark:text-slate-350 truncate max-w-sm">{comp.description}</p>
+                      <p className="text-[10px] text-slate-400 font-medium">Logged on: {new Date(comp.createdAt).toLocaleDateString()}</p>
+                    </div>
+                    <div>
+                      <StatusBadge status={comp.status} />
+                    </div>
+                  </div>
+                ))
+              )}
+            </div>
+          </CardBody>
+        </Card>
 
-        {/* Quick Action shortcuts (Right 1 column) */}
-        <div className="glass bg-white dark:bg-navy-900 border border-slate-200 dark:border-navy-800 rounded-2xl shadow-sm p-6 space-y-6">
-          <h3 className="text-lg font-bold font-outfit text-navy-800 dark:text-white">Quick Actions</h3>
-          <div className="grid grid-cols-2 gap-4">
-            
-            <Link 
-              to="/dashboard/ai" 
-              className="p-4 rounded-xl border border-slate-200 dark:border-navy-850 hover:bg-slate-50 dark:hover:bg-navy-850 text-center space-y-2 flex flex-col items-center transition-all duration-200"
-            >
-              <span className="text-2xl">💬</span>
-              <p className="text-xs font-bold text-slate-700 dark:text-slate-350">AI Assistant</p>
-            </Link>
+        {/* Quick Action Shortcuts (Right 1 column) */}
+        <Card className="space-y-4">
+          <CardHeader>
+            <CardTitle>Quick Citizen Services</CardTitle>
+          </CardHeader>
 
-            <Link 
-              to="/dashboard/locker" 
-              className="p-4 rounded-xl border border-slate-200 dark:border-navy-850 hover:bg-slate-50 dark:hover:bg-navy-850 text-center space-y-2 flex flex-col items-center transition-all duration-200"
-            >
-              <span className="text-2xl">🔒</span>
-              <p className="text-xs font-bold text-slate-700 dark:text-slate-350">DigiLocker</p>
-            </Link>
+          <CardBody>
+            <div className="grid grid-cols-2 gap-3">
+              
+              <Link 
+                to="/dashboard/ai" 
+                className="p-3.5 rounded-xl border border-slate-200 dark:border-navy-800 hover:bg-slate-50 dark:hover:bg-navy-850 text-center space-y-2 flex flex-col items-center transition-all duration-200"
+              >
+                <div className="p-2.5 rounded-xl bg-saffron-500/10 text-saffron-500">
+                  <Bot size={20} />
+                </div>
+                <p className="text-xs font-bold text-slate-700 dark:text-slate-300">Ask AI</p>
+              </Link>
 
-            <Link 
-              to="/dashboard/offices" 
-              className="p-4 rounded-xl border border-slate-200 dark:border-navy-850 hover:bg-slate-50 dark:hover:bg-navy-850 text-center space-y-2 flex flex-col items-center transition-all duration-200"
-            >
-              <span className="text-2xl">📍</span>
-              <p className="text-xs font-bold text-slate-700 dark:text-slate-350">Offices Map</p>
-            </Link>
+              <Link 
+                to="/dashboard/report" 
+                className="p-4 rounded-xl border border-slate-200 dark:border-navy-800 hover:bg-slate-50 dark:hover:bg-navy-850 text-center space-y-2 flex flex-col items-center transition-all duration-200"
+              >
+                <div className="p-2.5 rounded-xl bg-red-500/10 text-red-500">
+                  <AlertCircle size={20} />
+                </div>
+                <p className="text-xs font-bold text-slate-700 dark:text-slate-300">Report Issue</p>
+              </Link>
 
-            <Link 
-              to="/dashboard/emergency" 
-              className="p-4 rounded-xl border border-slate-200 dark:border-navy-850 hover:bg-slate-50 dark:hover:bg-navy-850 text-center space-y-2 flex flex-col items-center transition-all duration-200"
-            >
-              <span className="text-2xl">☎️</span>
-              <p className="text-xs font-bold text-slate-700 dark:text-slate-350">Emergency</p>
-            </Link>
+              <Link 
+                to="/dashboard/locker" 
+                className="p-4 rounded-xl border border-slate-200 dark:border-navy-800 hover:bg-slate-50 dark:hover:bg-navy-850 text-center space-y-2 flex flex-col items-center transition-all duration-200"
+              >
+                <div className="p-2.5 rounded-xl bg-teal-500/10 text-teal-500">
+                  <Lock size={20} />
+                </div>
+                <p className="text-xs font-bold text-slate-700 dark:text-slate-300">DigiLocker</p>
+              </Link>
 
-          </div>
-        </div>
+              <Link 
+                to="/dashboard/offices" 
+                className="p-4 rounded-xl border border-slate-200 dark:border-navy-800 hover:bg-slate-50 dark:hover:bg-navy-850 text-center space-y-2 flex flex-col items-center transition-all duration-200"
+              >
+                <div className="p-2.5 rounded-xl bg-blue-500/10 text-blue-500">
+                  <MapPin size={20} />
+                </div>
+                <p className="text-xs font-bold text-slate-700 dark:text-slate-300">Offices Map</p>
+              </Link>
+
+              <Link 
+                to="/dashboard/schemes" 
+                className="p-4 rounded-xl border border-slate-200 dark:border-navy-800 hover:bg-slate-50 dark:hover:bg-navy-850 text-center space-y-2 flex flex-col items-center transition-all duration-200"
+              >
+                <div className="p-2.5 rounded-xl bg-purple-500/10 text-purple-500">
+                  <BookOpen size={20} />
+                </div>
+                <p className="text-xs font-bold text-slate-700 dark:text-slate-300">Schemes</p>
+              </Link>
+
+              <Link 
+                to="/dashboard/emergency" 
+                className="p-4 rounded-xl border border-slate-200 dark:border-navy-800 hover:bg-slate-50 dark:hover:bg-navy-850 text-center space-y-2 flex flex-col items-center transition-all duration-200"
+              >
+                <div className="p-2.5 rounded-xl bg-amber-500/10 text-amber-500">
+                  <ShieldAlert size={20} />
+                </div>
+                <p className="text-xs font-bold text-slate-700 dark:text-slate-300">Emergency</p>
+              </Link>
+
+            </div>
+          </CardBody>
+        </Card>
 
       </div>
 

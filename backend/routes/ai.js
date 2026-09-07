@@ -146,7 +146,7 @@ router.post('/chat', async (req, res) => {
 
   try {
     const genAI = new GoogleGenerativeAI(apiKey);
-    const model = genAI.getGenerativeModel({ model: 'gemini-1.5-flash' });
+    const model = genAI.getGenerativeModel({ model: 'gemini-2.5-flash' });
 
     // Format chat history for Gemini API context
     const formattedHistory = (chatHistory || []).slice(-10).map(msg => {

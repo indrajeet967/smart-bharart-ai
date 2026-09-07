@@ -1,317 +1,418 @@
 import React, { useState, useEffect } from 'react';
 import { useAuth } from '../context/AuthContext';
 import { useLanguage } from '../context/LanguageContext';
-import { Lock, FileText, CheckCircle2, ShieldAlert, Sparkles, UploadCloud, AlertCircle } from 'lucide-react';
+import { useToast } from '../context/ToastContext';
+import { 
+  FileText, ShieldCheck, Lock, UploadCloud, Search, Trash2, Download, 
+  ExternalLink, Sparkles, Filter, AlertTriangle, Eye, ShieldAlert 
+} from 'lucide-react';
 import axios from 'axios';
+import Card, { CardHeader, CardTitle, CardBody } from '../components/ui/Card';
+import PageHeader from '../components/ui/PageHeader';
+import Button from '../components/ui/Button';
+import Input from '../components/ui/Input';
+import Select from '../components/ui/Select';
+import SearchBar from '../components/ui/SearchBar';
+import Badge from '../components/ui/Badge';
+import Alert from '../components/ui/Alert';
+import EmptyState from '../components/ui/EmptyState';
+import Modal from '../components/ui/Modal';
+import ConfirmationDialog from '../components/ui/ConfirmationDialog';
 
 export default function DocumentAssistant() {
   const { profile } = useAuth();
   const { t } = useLanguage();
+  const toast = useToast();
 
-  const [activeTab, setActiveTab] = useState('locker'); // 'locker' or 'simplifier'
-
-  // Locker state
   const [documents, setDocuments] = useState([]);
-  const [uploadDocType, setUploadDocType] = useState('Aadhaar Card');
-  const [uploadFile, setUploadFile] = useState(null);
+  const [loadingDocs, setLoadingDocs] = useState(true);
+
+  // Upload Form State
+  const [docType, setDocType] = useState('Aadhaar Card');
+  const [category, setCategory] = useState('Identity');
+  const [file, setFile] = useState(null);
+  const [filePreview, setFilePreview] = useState('');
   const [uploading, setUploading] = useState(false);
-  const [ocrDetails, setOcrDetails] = useState(null);
 
-  // Legal simplifier state
+  // Search & Filter State
+  const [searchQuery, setSearchQuery] = useState('');
+  const [selectedCategoryFilter, setSelectedCategoryFilter] = useState('All');
+
+  // Modal / Action State
+  const [selectedDoc, setSelectedDoc] = useState(null);
+  const [deleteDocId, setDeleteDocId] = useState(null);
+  const [deleting, setDeleting] = useState(false);
+
+  // Legal Simplifier State
   const [legalText, setLegalText] = useState('');
-  const [simplifying, setSimplifying] = useState(false);
   const [simplifiedOutput, setSimplifiedOutput] = useState('');
+  const [simplifying, setSimplifying] = useState(false);
 
-  // Fetch user locker files
-  const fetchLockerDocs = async () => {
+  const docTypeOptions = [
+    { value: 'Aadhaar Card', category: 'Identity' },
+    { value: 'PAN Card', category: 'Identity' },
+    { value: 'Voter ID Card', category: 'Identity' },
+    { value: 'Driving Licence', category: 'Identity' },
+    { value: '10th / 12th Marksheet', category: 'Education' },
+    { value: 'Degree Certificate', category: 'Education' },
+    { value: 'Birth Certificate', category: 'Certificates' },
+    { value: 'Income Certificate', category: 'Certificates' },
+    { value: 'Ration Card', category: 'Government' },
+    { value: 'Other Document', category: 'Other' }
+  ];
+
+  // Fetch documents
+  const fetchDocuments = async () => {
     if (!profile?.email) return;
     try {
+      setLoadingDocs(true);
       const res = await axios.get(`/api/documents/user/${profile.email}`);
       setDocuments(res.data);
-    } catch (e) {
-      console.warn("Could not retrieve locker files, loading fallback mocks.");
-      // Fallback local list
-      setDocuments([
-        {
-          _id: 'doc_mock_1',
-          docType: 'Aadhaar Card',
-          fileName: 'aadhaar_front.jpg',
-          fileUrl: '#',
-          verificationStatus: 'Verified (Mock Mode)',
-          details: { docNumber: 'XXXX-XXXX-8924', name: profile?.displayName || 'Citizen Name' },
-          uploadedAt: new Date().toISOString()
-        }
-      ]);
+    } catch (err) {
+      console.warn("Could not load documents:", err);
+      toast.error("Failed to load DigiLocker documents.");
+    } finally {
+      setLoadingDocs(false);
     }
   };
 
   useEffect(() => {
-    fetchLockerDocs();
+    fetchDocuments();
   }, [profile?.email]);
 
-  const handleLockerSubmit = async (e) => {
+  const handleFileChange = (e) => {
+    const selectedFile = e.target.files[0];
+    if (!selectedFile) return;
+
+    if (selectedFile.size > 5 * 1024 * 1024) {
+      toast.error("File size exceeds 5MB limit.");
+      return;
+    }
+
+    setFile(selectedFile);
+    if (selectedFile.type.startsWith('image/')) {
+      const reader = new FileReader();
+      reader.onloadend = () => setFilePreview(reader.result);
+      reader.readAsDataURL(selectedFile);
+    } else {
+      setFilePreview('');
+    }
+  };
+
+  const handleUpload = async (e) => {
     e.preventDefault();
-    if (!uploadFile) return;
+    if (!file) {
+      toast.error("Please attach a document file.");
+      return;
+    }
 
     setUploading(true);
-    setOcrDetails(null);
-
     const formData = new FormData();
-    formData.append('documentFile', uploadFile);
+    formData.append('documentFile', file);
+    formData.append('docType', docType);
+    formData.append('category', category);
     formData.append('email', profile?.email || 'guest@gmail.com');
-    formData.append('docType', uploadDocType);
 
     try {
       const res = await axios.post('/api/documents/upload', formData, {
         headers: { 'Content-Type': 'multipart/form-data' }
       });
-      
+
       if (res.data.success) {
-        setOcrDetails(res.data.document);
-        // Refresh list
-        fetchLockerDocs();
-        setUploadFile(null);
+        toast.success(`Saved "${docType}" to DigiLocker!`);
+        setFile(null);
+        setFilePreview('');
+        fetchDocuments();
       }
     } catch (err) {
-      console.error(err);
-      alert("Verification Upload failed. Verify Gemini credentials.");
+      toast.error(err.response?.data?.error || "Failed to upload document.");
     } finally {
       setUploading(false);
     }
   };
 
-  const handleSimplifySubmit = async (e) => {
-    e.preventDefault();
-    if (!legalText.trim()) return;
+  const handleDelete = async () => {
+    if (!deleteDocId) return;
+    setDeleting(true);
+    try {
+      await axios.delete(`/api/documents/${deleteDocId}`);
+      toast.success("Document removed from DigiLocker.");
+      setDeleteDocId(null);
+      fetchDocuments();
+    } catch (err) {
+      toast.error("Failed to delete document.");
+    } finally {
+      setDeleting(false);
+    }
+  };
+
+  const handleSimplifyLegalText = async () => {
+    if (!legalText.trim()) {
+      toast.error("Please paste legal text or circular content first.");
+      return;
+    }
 
     setSimplifying(true);
-    setSimplifiedOutput('');
-
     try {
       const res = await axios.post('/api/documents/simplify', { legalText });
       setSimplifiedOutput(res.data.simplifiedText);
+      toast.success("Legal text simplified into plain language!");
     } catch (err) {
-      console.error(err);
-      setSimplifiedOutput("❌ Failed to contact legal simplify service.");
+      toast.error("Failed to simplify document text.");
     } finally {
       setSimplifying(false);
     }
   };
 
+  // Filtered documents
+  const filteredDocuments = documents.filter((doc) => {
+    const matchesCategory = selectedCategoryFilter === 'All' || doc.category === selectedCategoryFilter;
+    const matchesSearch = searchQuery === '' || 
+      (doc.docType && doc.docType.toLowerCase().includes(searchQuery.toLowerCase())) ||
+      (doc.fileName && doc.fileName.toLowerCase().includes(searchQuery.toLowerCase()));
+    return matchesCategory && matchesSearch;
+  });
+
   return (
     <div className="space-y-8 animate-fade-in pb-12">
       
-      {/* Header */}
-      <div>
-        <h1 className="text-3xl font-extrabold font-outfit text-navy-800 dark:text-white flex items-center gap-2">
-          <Lock className="text-saffron-500" />
-          AI Digital Locker & Document Suite
-        </h1>
-        <p className="text-sm text-slate-500 dark:text-slate-400 mt-1.5">
-          Store important credentials securely, run auto-verification checks, and simplify complicated legal circulars using conversational AI.
-        </p>
-      </div>
+      {/* Page Header */}
+      <PageHeader
+        title="DigiLocker & Document Vault"
+        description="Encrypted government document vault with AI OCR verification and plain-language legal circular simplification."
+        icon={Lock}
+        badge="256-Bit SSL Encrypted"
+      />
 
-      {/* Tabs Menu */}
-      <div className="flex border-b border-slate-200 dark:border-navy-800 max-w-md">
-        <button
-          onClick={() => setActiveTab('locker')}
-          className={`flex-1 pb-3 text-sm font-bold text-center border-b-2 transition-all ${
-            activeTab === 'locker'
-              ? 'border-saffron-500 text-saffron-500'
-              : 'border-transparent text-slate-450 dark:text-slate-500 hover:text-slate-655'
-          }`}
-        >
-          🔒 Digital Locker
-        </button>
-        <button
-          onClick={() => setActiveTab('simplifier')}
-          className={`flex-1 pb-3 text-sm font-bold text-center border-b-2 transition-all ${
-            activeTab === 'simplifier'
-              ? 'border-saffron-500 text-saffron-500'
-              : 'border-transparent text-slate-450 dark:text-slate-500 hover:text-slate-655'
-          }`}
-        >
-          ⚖️ Legal Jargon Simplifier
-        </button>
-      </div>
+      {/* College Project Educational Disclaimer Warning Banner */}
+      <Alert variant="warning" title="Educational Project Notice">
+        <strong>Important:</strong> This is a college demonstration project. Please do <strong>not</strong> upload real sensitive Aadhaar numbers, PAN cards, OTPs, or passwords. Use sample test files or dummy documents for demonstration.
+      </Alert>
 
-      {/* Content wrapper */}
-      {activeTab === 'locker' ? (
-        <div className="grid grid-cols-1 lg:grid-cols-3 gap-8 animate-fade-in">
-          
-          {/* Locker Upload Card (1 column) */}
-          <div className="lg:col-span-1 glass bg-white dark:bg-navy-900 border border-slate-200 dark:border-navy-800 rounded-2xl shadow-sm p-6 space-y-4 h-fit">
-            <h3 className="text-base font-bold font-outfit text-navy-800 dark:text-white flex items-center gap-1.5 border-b border-slate-100 dark:border-navy-800 pb-2">
-              <UploadCloud size={18} className="text-saffron-500" /> Verify & Store ID
-            </h3>
+      {/* Main Split Layout: Upload & Vault List */}
+      <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
+        
+        {/* Upload Form (Left Column) */}
+        <Card className="lg:col-span-1 space-y-4">
+          <CardHeader>
+            <CardTitle icon={UploadCloud}>Upload Document</CardTitle>
+          </CardHeader>
+          <CardBody>
+            <form onSubmit={handleUpload} className="space-y-4">
+              
+              <Select
+                label="Document Type"
+                value={docType}
+                onChange={(e) => {
+                  setDocType(e.target.value);
+                  const selectedOpt = docTypeOptions.find(o => o.value === e.target.value);
+                  if (selectedOpt) setCategory(selectedOpt.category);
+                }}
+              >
+                {docTypeOptions.map((opt) => (
+                  <option key={opt.value} value={opt.value}>{opt.value} ({opt.category})</option>
+                ))}
+              </Select>
 
-            <form onSubmit={handleLockerSubmit} className="space-y-4 text-xs font-semibold text-slate-500">
-              <div className="space-y-1">
-                <label className="uppercase tracking-wider">Document Type</label>
-                <select
-                  value={uploadDocType}
-                  onChange={(e) => setUploadDocType(e.target.value)}
-                  className="w-full px-3 py-2 border border-slate-200 dark:border-navy-800 rounded-lg bg-slate-50 dark:bg-navy-950 text-slate-800 dark:text-slate-100 focus:outline-none focus:border-saffron-500 font-bold"
-                >
-                  <option value="Aadhaar Card">Aadhaar Card</option>
-                  <option value="PAN Card">PAN Card</option>
-                  <option value="Driving Licence">Driving Licence</option>
-                  <option value="Voter ID Card">Voter ID Card</option>
-                </select>
-              </div>
+              <Select
+                label="Category"
+                value={category}
+                onChange={(e) => setCategory(e.target.value)}
+              >
+                <option value="Identity">Identity</option>
+                <option value="Education">Education</option>
+                <option value="Certificates">Certificates</option>
+                <option value="Government">Government</option>
+                <option value="Other">Other</option>
+              </Select>
 
-              <div className="space-y-1">
-                <label className="uppercase tracking-wider">Select File</label>
-                <div className="border-2 border-dashed border-slate-200 dark:border-navy-850 rounded-xl p-4 text-center cursor-pointer hover:border-saffron-500 bg-slate-50/50 dark:bg-navy-950/20 relative flex flex-col items-center">
-                  <FileText size={24} className="text-slate-400 mb-1" />
-                  <span className="text-[10px] text-slate-500 font-bold">
-                    {uploadFile ? uploadFile.name : 'Choose JPG/PNG/PDF'}
-                  </span>
+              <div className="space-y-1.5">
+                <label className="block text-xs font-bold text-slate-700 dark:text-slate-300 uppercase tracking-wider">
+                  Attachment File
+                </label>
+                <div className="border-2 border-dashed border-slate-300 dark:border-navy-700 rounded-xl p-4 text-center bg-slate-50/50 dark:bg-navy-950/20 hover:border-saffron-500 transition-colors">
                   <input
                     type="file"
-                    required
-                    accept="image/*,application/pdf"
-                    onChange={(e) => setUploadFile(e.target.files[0])}
-                    className="absolute inset-0 opacity-0 cursor-pointer"
+                    accept=".pdf,.jpg,.jpeg,.png"
+                    onChange={handleFileChange}
+                    className="hidden"
+                    id="locker-file-input"
                   />
+                  <label htmlFor="locker-file-input" className="cursor-pointer text-xs font-bold text-saffron-500 hover:underline">
+                    {file ? file.name : "Select PDF / Image (Max 5MB)"}
+                  </label>
                 </div>
               </div>
 
-              <button
-                type="submit"
-                disabled={uploading}
-                className="w-full py-2 bg-navy-800 dark:bg-saffron-500 hover:bg-navy-900 dark:hover:bg-saffron-600 text-white font-bold rounded-lg shadow text-xs flex items-center justify-center gap-1.5 disabled:opacity-50"
-              >
-                {uploading ? (
-                  <div className="flex items-center gap-1.5">
-                    <div className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin" />
-                    <span>OCR Verifying...</span>
-                  </div>
-                ) : (
-                  <>Upload & Run OCR</>
-                )}
-              </button>
+              {filePreview && (
+                <img src={filePreview} alt="Preview" className="h-28 w-full object-cover rounded-xl border border-slate-200 dark:border-navy-800" />
+              )}
+
+              <Button variant="saffron" type="submit" isLoading={uploading} icon={UploadCloud} className="w-full">
+                Upload & Verify
+              </Button>
             </form>
+          </CardBody>
+        </Card>
 
-            {/* OCR Success Panel */}
-            {ocrDetails && (
-              <div className="p-4 bg-emerald-50 dark:bg-emerald-500/10 border border-emerald-200 dark:border-emerald-500/25 rounded-2xl space-y-3 animate-scale-up">
-                <div className="flex items-center gap-1.5 text-emerald-700 dark:text-emerald-400 font-bold text-xs">
-                  <CheckCircle2 size={16} /> Verified Document
-                </div>
-                <div className="text-[10px] font-semibold text-slate-500 space-y-1">
-                  <p>NAME EXTRACTED: <span className="text-slate-800 dark:text-white font-bold">{ocrDetails.details?.name}</span></p>
-                  <p>NUMBER EXTRACTED: <span className="text-slate-850 dark:text-white font-bold font-mono">{ocrDetails.details?.docNumber}</span></p>
-                  <p>OCR STATUS: <span className="text-emerald-600 font-bold">{ocrDetails.verificationStatus}</span></p>
-                </div>
-              </div>
-            )}
-          </div>
+        {/* Saved Documents Grid & Filter (Right 2 Columns) */}
+        <Card className="lg:col-span-2 space-y-4">
+          <CardHeader>
+            <CardTitle icon={Lock}>
+              My Vault ({filteredDocuments.length})
+            </CardTitle>
+          </CardHeader>
+          <CardBody className="space-y-4">
+            
+            {/* Search & Category Filter Header */}
+            <div className="flex flex-col sm:flex-row gap-3">
+              <SearchBar
+                value={searchQuery}
+                onChange={setSearchQuery}
+                onClear={() => setSearchQuery('')}
+                placeholder="Search documents by name..."
+                className="flex-1"
+              />
+              <Select
+                value={selectedCategoryFilter}
+                onChange={(e) => setSelectedCategoryFilter(e.target.value)}
+                className="sm:w-40"
+              >
+                <option value="All">All Categories</option>
+                <option value="Identity">Identity</option>
+                <option value="Education">Education</option>
+                <option value="Certificates">Certificates</option>
+                <option value="Government">Government</option>
+                <option value="Other">Other</option>
+              </Select>
+            </div>
 
-          {/* Secure cabinet files grid (Right 2 columns) */}
-          <div className="lg:col-span-2 space-y-4">
-            <h3 className="text-base font-bold font-outfit text-navy-800 dark:text-white flex items-center gap-2">
-              Verified Documents Cabinet ({documents.length})
-            </h3>
-
-            {documents.length === 0 ? (
-              <div className="p-8 text-center glass bg-white dark:bg-navy-900 rounded-2xl border border-slate-200 dark:border-navy-800">
-                <p className="text-sm font-semibold text-slate-450">Locker is empty. Upload your identity cards on the left.</p>
-              </div>
+            {/* Documents Grid */}
+            {loadingDocs ? (
+              <div className="p-8 text-center text-xs text-slate-400">Loading stored documents...</div>
+            ) : filteredDocuments.length === 0 ? (
+              <EmptyState
+                icon={Lock}
+                title="No Documents Found"
+                description="Upload your credentials or adjust search filters to view your locker files."
+              />
             ) : (
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-                {documents.map((doc) => (
-                  <div key={doc._id} className="p-5 rounded-2xl glass bg-white dark:bg-navy-900 border border-slate-200 dark:border-navy-800 hover-card-trigger flex flex-col justify-between">
-                    <div className="space-y-3">
-                      <div className="flex justify-between items-start">
-                        <span className="text-[10px] bg-slate-100 dark:bg-navy-950 px-2 py-0.5 rounded font-bold text-slate-500 tracking-wider">
-                          {doc.docType}
-                        </span>
-                        <span className={`text-[9px] font-bold px-2 py-0.5 rounded-full ${
-                          doc.verificationStatus.includes('Verified') 
-                            ? 'bg-emerald-50 dark:bg-emerald-500/10 text-emerald-700 dark:text-emerald-400 border border-emerald-200/50' 
-                            : 'bg-amber-50 dark:bg-amber-500/10 text-amber-700 dark:text-amber-400 border border-amber-200/50'
-                        }`}>
-                          {doc.verificationStatus}
-                        </span>
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                {filteredDocuments.map((doc) => (
+                  <div
+                    key={doc._id}
+                    className="p-4 rounded-xl border border-slate-200 dark:border-navy-800 bg-slate-50/50 dark:bg-navy-950/40 hover:border-slate-300 dark:hover:border-navy-700 transition-all flex flex-col justify-between space-y-3"
+                  >
+                    <div className="flex justify-between items-start">
+                      <div className="space-y-0.5">
+                        <span className="text-xs font-bold text-navy-800 dark:text-white block">{doc.docType}</span>
+                        <span className="text-[10px] text-slate-400 font-medium">{doc.fileName}</span>
                       </div>
-                      <div>
-                        <p className="text-xs font-semibold text-slate-800 dark:text-slate-100 truncate">{doc.fileName}</p>
-                        <p className="text-[9px] text-slate-400">Uploaded on: {new Date(doc.uploadedAt).toLocaleDateString()}</p>
-                      </div>
-                      
-                      <div className="p-2.5 bg-slate-50 dark:bg-navy-950 rounded-xl space-y-1 text-[10px] text-slate-500 font-semibold border border-slate-150 dark:border-navy-850">
-                        <p>ID: <span className="font-mono text-slate-800 dark:text-slate-200 font-bold">{doc.details?.docNumber}</span></p>
-                        <p>Name: <span className="text-slate-800 dark:text-slate-200 font-bold">{doc.details?.name}</span></p>
-                      </div>
+                      <Badge variant="saffron" size="sm">{doc.category}</Badge>
                     </div>
 
-                    <a 
-                      href={doc.fileUrl} 
-                      target="_blank" 
-                      rel="noopener noreferrer"
-                      className="mt-4 block w-full py-1.5 text-center bg-slate-100 hover:bg-slate-200 dark:bg-navy-950 dark:hover:bg-navy-850 text-slate-700 dark:text-slate-250 font-bold rounded-lg text-xs transition-colors border border-slate-200/60 dark:border-navy-850"
-                    >
-                      View Document File
-                    </a>
+                    <div className="flex items-center justify-between pt-2 border-t border-slate-150 dark:border-navy-800 text-[10px] text-slate-400">
+                      <span>Verified Status: <strong className="text-emerald-600 dark:text-emerald-400">{doc.verificationStatus}</strong></span>
+                      <span>{doc.fileSize}</span>
+                    </div>
+
+                    <div className="flex items-center justify-end gap-2 pt-1">
+                      <Button variant="ghost" size="sm" onClick={() => setSelectedDoc(doc)} icon={Eye}>
+                        View
+                      </Button>
+                      <a href={doc.fileUrl} target="_blank" rel="noopener noreferrer" download>
+                        <Button variant="outline" size="sm" icon={Download}>
+                          Download
+                        </Button>
+                      </a>
+                      <Button variant="danger" size="sm" onClick={() => setDeleteDocId(doc._id)} icon={Trash2} />
+                    </div>
                   </div>
                 ))}
               </div>
             )}
+
+          </CardBody>
+        </Card>
+
+      </div>
+
+      {/* AI Legal Text Simplifier Card */}
+      <Card className="space-y-4">
+        <CardHeader>
+          <CardTitle icon={Sparkles}>AI Legal Circular Simplifier</CardTitle>
+        </CardHeader>
+        <CardBody className="space-y-4">
+          <div className="space-y-1.5">
+            <label className="block text-xs font-bold text-slate-700 dark:text-slate-300 uppercase tracking-wider">
+              Paste Legal Text / Government Circular
+            </label>
+            <textarea
+              rows={4}
+              value={legalText}
+              onChange={(e) => setLegalText(e.target.value)}
+              placeholder="Paste complex legal text, government notifications, or circular clauses here..."
+              className="w-full p-4 rounded-xl border border-slate-250 dark:border-navy-800 bg-slate-50 dark:bg-navy-950 text-slate-900 dark:text-slate-100 text-sm focus:outline-none focus:ring-2 focus:ring-saffron-500/50"
+            />
           </div>
 
-        </div>
-      ) : (
-        /* Jargon Simplifier Page Tab */
-        <div className="glass bg-white dark:bg-navy-900 border border-slate-200 dark:border-navy-800 rounded-2xl shadow-sm p-6 space-y-6 max-w-4xl mx-auto animate-fade-in">
-          <div className="flex items-center gap-2 mb-2">
-            <Sparkles className="text-saffron-500" />
-            <h3 className="text-lg font-bold font-outfit text-navy-800 dark:text-white">AI Legal Jargon Simplifier</h3>
-          </div>
+          <Button variant="saffron" onClick={handleSimplifyLegalText} isLoading={simplifying} icon={Sparkles}>
+            Simplify Legal Language
+          </Button>
 
-          <form onSubmit={handleSimplifySubmit} className="space-y-4">
-            <div className="space-y-1">
-              <label className="text-xs font-semibold text-slate-500 uppercase tracking-wider">Paste Government Circular or Legal Language</label>
-              <textarea
-                required
-                rows={6}
-                value={legalText}
-                onChange={(e) => setLegalText(e.target.value)}
-                placeholder="Paste the dense circular or legal clauses here..."
-                className="w-full px-4 py-2.5 rounded-xl border border-slate-250 dark:border-navy-800 bg-slate-50 dark:bg-navy-950 focus:border-saffron-500 focus:outline-none text-sm transition-colors"
-              />
-            </div>
-
-            <button
-              type="submit"
-              disabled={simplifying}
-              className="w-full py-2.5 bg-navy-800 dark:bg-saffron-500 hover:bg-navy-900 dark:hover:bg-saffron-600 text-white font-bold rounded-lg shadow text-xs flex items-center justify-center gap-1.5"
-            >
-              {simplifying ? (
-                <div className="flex items-center gap-1.5">
-                  <div className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin" />
-                  <span>Simplifying dense text...</span>
-                </div>
-              ) : (
-                <>Simplify Phrases with AI</>
-              )}
-            </button>
-          </form>
-
-          {/* Simplifier output display */}
           {simplifiedOutput && (
-            <div className="p-6 bg-saffron-500/5 border border-saffron-200/50 dark:border-navy-800 rounded-2xl shadow-inner animate-scale-up space-y-3 whitespace-pre-line text-xs text-slate-650 dark:text-slate-350 leading-relaxed font-semibold">
-              <div className="flex items-center gap-1 text-saffron-600 dark:text-saffron-400 font-bold border-b border-saffron-200/50 pb-2">
-                <Sparkles size={14} /> Simplified Plain Terms
-              </div>
-              <div>
+            <div className="p-5 rounded-2xl bg-slate-50 dark:bg-navy-950 border border-slate-200 dark:border-navy-800 space-y-2">
+              <h4 className="text-xs font-bold text-saffron-500 uppercase tracking-wider">Simplified Summary</h4>
+              <div className="text-xs text-slate-700 dark:text-slate-200 leading-relaxed whitespace-pre-line">
                 {simplifiedOutput}
               </div>
             </div>
           )}
-        </div>
+        </CardBody>
+      </Card>
+
+      {/* Document Inspector Modal */}
+      {selectedDoc && (
+        <Modal
+          isOpen={!!selectedDoc}
+          onClose={() => setSelectedDoc(null)}
+          title={`Inspector: ${selectedDoc.docType}`}
+          subtitle={`Uploaded on ${new Date(selectedDoc.uploadedAt).toLocaleDateString()}`}
+        >
+          <div className="space-y-4">
+            <div className="p-4 rounded-xl bg-slate-50 dark:bg-navy-950 border border-slate-200 dark:border-navy-800 space-y-2 text-xs">
+              <div className="flex justify-between">
+                <span className="text-slate-400 font-bold">Category:</span>
+                <span className="font-bold text-navy-800 dark:text-white">{selectedDoc.category}</span>
+              </div>
+              <div className="flex justify-between">
+                <span className="text-slate-400 font-bold">Document Number:</span>
+                <span className="font-bold font-mono text-saffron-500">{selectedDoc.details?.docNumber || 'SB-DOC-XXXXX'}</span>
+              </div>
+              <div className="flex justify-between">
+                <span className="text-slate-400 font-bold">Holder Name:</span>
+                <span className="font-bold text-slate-700 dark:text-slate-200">{selectedDoc.details?.name || profile?.displayName || 'Citizen'}</span>
+              </div>
+            </div>
+
+            {selectedDoc.fileUrl && selectedDoc.fileType?.startsWith('image/') && (
+              <img src={selectedDoc.fileUrl} alt="Document" className="w-full max-h-60 object-contain rounded-xl border border-slate-200 dark:border-navy-800" />
+            )}
+          </div>
+        </Modal>
       )}
+
+      {/* Delete Confirmation Dialog */}
+      <ConfirmationDialog
+        isOpen={!!deleteDocId}
+        onClose={() => setDeleteDocId(null)}
+        onConfirm={handleDelete}
+        title="Delete Document from DigiLocker"
+        message="Are you sure you want to delete this document? This action cannot be undone."
+        confirmText="Delete Document"
+        variant="danger"
+        isLoading={deleting}
+      />
 
     </div>
   );

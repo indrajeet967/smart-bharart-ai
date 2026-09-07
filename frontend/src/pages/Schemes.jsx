@@ -1,290 +1,408 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { useAuth } from '../context/AuthContext';
 import { useLanguage } from '../context/LanguageContext';
-import { BookOpen, User, HelpCircle, GraduationCap, DollarSign, Briefcase, MapPin, Sparkles, AlertCircle } from 'lucide-react';
+import { useToast } from '../context/ToastContext';
+import { 
+  BookOpen, Search, Filter, ExternalLink, CheckCircle, Sparkles, 
+  Building2, Users, IndianRupee, ShieldAlert, Award, FileText, ChevronRight 
+} from 'lucide-react';
 import axios from 'axios';
-import { CardSkeleton } from '../components/Skeleton';
-import confetti from 'canvas-confetti';
+import Card, { CardHeader, CardTitle, CardBody } from '../components/ui/Card';
+import PageHeader from '../components/ui/PageHeader';
+import Button from '../components/ui/Button';
+import Input from '../components/ui/Input';
+import Select from '../components/ui/Select';
+import SearchBar from '../components/ui/SearchBar';
+import Badge from '../components/ui/Badge';
+import Alert from '../components/ui/Alert';
+import EmptyState from '../components/ui/EmptyState';
+import Modal from '../components/ui/Modal';
 
 export default function Schemes() {
   const { profile } = useAuth();
   const { t } = useLanguage();
+  const toast = useToast();
 
-  // Wizard state: Age, Gender, State, Income, Occupation, Category, Disability, Student
-  const [age, setAge] = useState(25);
-  const [gender, setGender] = useState('All');
-  const [stateName, setStateName] = useState(profile?.state || 'Delhi');
-  const [income, setIncome] = useState(200000);
-  const [occupation, setOccupation] = useState('Farmer');
-  const [category, setCategory] = useState('General');
-  const [disability, setDisability] = useState(false);
-  const [student, setStudent] = useState(false);
+  const [schemes, setSchemes] = useState([]);
+  const [loading, setLoading] = useState(true);
 
-  const [loading, setLoading] = useState(false);
-  const [recommendedSchemes, setRecommendedSchemes] = useState([]);
-  const [narrativeSummary, setNarrativeSummary] = useState('');
-  const [showResults, setShowResults] = useState(false);
-  const [appliedScheme, setAppliedScheme] = useState(null);
+  // Search & Filter State
+  const [searchQuery, setSearchQuery] = useState('');
+  const [selectedCategory, setSelectedCategory] = useState('All');
+  const [selectedState, setSelectedState] = useState('All');
 
-  const handleRecommend = async (e) => {
-    e.preventDefault();
-    setLoading(true);
-    setShowResults(false);
+  // Matcher Wizard State
+  const [showMatcher, setShowMatcher] = useState(false);
+  const [matchProfile, setMatchProfile] = useState({
+    age: 25,
+    gender: 'All',
+    state: profile?.state || 'Delhi',
+    income: 200000,
+    occupation: 'Any',
+    category: 'General'
+  });
+  const [matchingResults, setMatchingResults] = useState(null);
+  const [matchingLoading, setMatchingLoading] = useState(false);
 
+  // Scheme Modal Detail State
+  const [activeSchemeModal, setActiveSchemeModal] = useState(null);
+
+  // Initial Fetch Schemes
+  const fetchSchemes = async () => {
     try {
+      setLoading(true);
       const res = await axios.post('/api/schemes/recommend', {
-        age,
-        gender,
-        state: stateName,
-        income,
-        occupation,
-        category,
-        disability,
-        student
+        age: 25,
+        gender: 'All',
+        state: 'All',
+        income: 1000000,
+        occupation: 'Any',
+        category: 'All'
       });
-
-      setRecommendedSchemes(res.data.eligibleSchemes || []);
-      setNarrativeSummary(res.data.recommendation || '');
-      setShowResults(true);
-
-      // Trigger success confetti if matches found
-      if (res.data.eligibleSchemes?.length > 0) {
-        confetti({
-          particleCount: 80,
-          spread: 60,
-          origin: { y: 0.8 }
-        });
-      }
+      setSchemes(res.data.eligibleSchemes || []);
     } catch (err) {
-      console.error(err);
-      alert("Failed to fetch scheme recommendations.");
+      console.warn("Schemes fetch error:", err);
+      // Fallback structured schemes
+      setSchemes([
+        {
+          _id: 'sch_1',
+          title: "Pradhan Mantri Kisan Samman Nidhi (PM-KISAN)",
+          description: "Provides direct income support of ₹6,000 per year in three equal installments to small and marginal farmers across India.",
+          category: "Agriculture",
+          state: "All",
+          ministry: "Ministry of Agriculture and Farmers Welfare",
+          benefits: "₹6,000 direct bank transfer per year in 3 installments of ₹2,000.",
+          eligibility: { ageMin: 18, ageMax: 100, gender: "All", incomeMax: 300000, occupation: ["Farmer"] },
+          requiredDocuments: ["Aadhaar Card", "Landholding Records", "Bank Account Passbook"],
+          applicationMethod: "Online via PM-KISAN Portal or CSC Centers",
+          applyUrl: "https://pmkisan.gov.in/",
+          officialSource: "https://www.myscheme.gov.in/schemes/pm-kisan",
+          lastVerified: "2026-08-15"
+        },
+        {
+          _id: 'sch_2',
+          title: "Ayushman Bharat - PM Jan Arogya Yojana (PM-JAY)",
+          description: "World's largest health assurance scheme providing ₹5 Lakh health cover per family per year for secondary & tertiary hospitalization.",
+          category: "Healthcare",
+          state: "All",
+          ministry: "Ministry of Health and Family Welfare",
+          benefits: "Cashless health cover up to ₹5,000,000 per family annually.",
+          eligibility: { ageMin: 0, ageMax: 120, gender: "All", incomeMax: 250000, occupation: ["Laborer", "Any"] },
+          requiredDocuments: ["Aadhaar Card", "Ration Card", "Identity Proof"],
+          applicationMethod: "Empanelled Hospital Ayushman Mitra Desk",
+          applyUrl: "https://pmjay.gov.in/",
+          officialSource: "https://www.myscheme.gov.in/schemes/pmjay",
+          lastVerified: "2026-08-10"
+        },
+        {
+          _id: 'sch_3',
+          title: "Pradhan Mantri Awas Yojana (PMAY)",
+          description: "Affordable housing mission providing interest subsidies on home loans and direct financial assistance for house construction.",
+          category: "Housing",
+          state: "All",
+          ministry: "Ministry of Housing and Urban Affairs",
+          benefits: "Interest subsidy up to 6.5% on home loans for EWS and LIG categories.",
+          eligibility: { ageMin: 18, ageMax: 99, gender: "All", incomeMax: 600000, occupation: ["Any"] },
+          requiredDocuments: ["Aadhaar Card", "Income Certificate", "Property Documents"],
+          applicationMethod: "Online PMAY Urban/Gramin Portal",
+          applyUrl: "https://pmaymis.gov.in/",
+          officialSource: "https://www.india.gov.in/spotlight/pradhan-mantri-awas-yojana",
+          lastVerified: "2026-07-20"
+        }
+      ]);
     } finally {
       setLoading(false);
     }
   };
 
-  const handleApply = (schemeTitle) => {
-    setAppliedScheme(schemeTitle);
-    setTimeout(() => {
-      setAppliedScheme(null);
-      alert(`Simulation Complete: Application submitted for "${schemeTitle}". The department will verify details from your secure Digital Locker.`);
-    }, 1500);
+  useEffect(() => {
+    fetchSchemes();
+  }, []);
+
+  const handleRunMatcher = async (e) => {
+    e?.preventDefault();
+    setMatchingLoading(true);
+    try {
+      const res = await axios.post('/api/schemes/recommend', matchProfile);
+      setMatchingResults(res.data.eligibleSchemes || []);
+      toast.success(`Found ${res.data.eligibleSchemes?.length || 0} preliminary matched schemes!`);
+    } catch (err) {
+      toast.error("Failed to run scheme eligibility matcher.");
+    } finally {
+      setMatchingLoading(false);
+    }
   };
+
+  // Filter schemes
+  const displaySchemes = matchingResults || schemes.filter((s) => {
+    const matchesCat = selectedCategory === 'All' || s.category === selectedCategory;
+    const matchesState = selectedState === 'All' || s.state === 'All' || s.state?.toLowerCase() === selectedState.toLowerCase();
+    const matchesQuery = searchQuery === '' || 
+      (s.title && s.title.toLowerCase().includes(searchQuery.toLowerCase())) ||
+      (s.description && s.description.toLowerCase().includes(searchQuery.toLowerCase()));
+    return matchesCat && matchesState && matchesQuery;
+  });
 
   return (
     <div className="space-y-8 animate-fade-in pb-12">
       
-      {/* Header Banner */}
-      <div>
-        <h1 className="text-3xl font-extrabold font-outfit text-navy-800 dark:text-white flex items-center gap-2">
-          <BookOpen className="text-saffron-500" />
-          Government Schemes Recommender
-        </h1>
-        <p className="text-sm text-slate-500 dark:text-slate-400 mt-1.5">
-          Enter your demographic details to discover financial support, scholarships, and welfare programs you qualify for.
-        </p>
+      {/* Page Header */}
+      <PageHeader
+        title="Government Schemes & Welfare Portal"
+        description="Discover central and state welfare initiatives. Filter by eligibility, check requirements, and apply directly via official government portals."
+        icon={BookOpen}
+        actions={
+          <Button
+            variant={showMatcher ? 'saffron' : 'outline'}
+            size="sm"
+            onClick={() => setShowMatcher(!showMatcher)}
+            icon={Sparkles}
+          >
+            {showMatcher ? 'Close Matcher' : 'Find Schemes For Me'}
+          </Button>
+        }
+      />
+
+      {/* "Find Schemes For Me" Interactive Matcher Wizard */}
+      {showMatcher && (
+        <Card className="border-2 border-saffron-500/40 bg-saffron-500/5 space-y-6 animate-scale-up">
+          <CardHeader>
+            <CardTitle icon={Sparkles}>Scheme Eligibility Calculator</CardTitle>
+            <Badge variant="saffron">AI Profile Matcher</Badge>
+          </CardHeader>
+          <CardBody>
+            <form onSubmit={handleRunMatcher} className="space-y-4">
+              <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
+                <Input
+                  label="Age (Years)"
+                  type="number"
+                  value={matchProfile.age}
+                  onChange={(e) => setMatchProfile({ ...matchProfile, age: e.target.value })}
+                />
+                <Input
+                  label="Annual Family Income (₹)"
+                  type="number"
+                  value={matchProfile.income}
+                  onChange={(e) => setMatchProfile({ ...matchProfile, income: e.target.value })}
+                />
+                <Select
+                  label="State / UT"
+                  value={matchProfile.state}
+                  onChange={(e) => setMatchProfile({ ...matchProfile, state: e.target.value })}
+                >
+                  <option value="All">All India</option>
+                  <option value="Delhi">Delhi</option>
+                  <option value="Maharashtra">Maharashtra</option>
+                  <option value="Uttar Pradesh">Uttar Pradesh</option>
+                  <option value="Karnataka">Karnataka</option>
+                  <option value="Tamil Nadu">Tamil Nadu</option>
+                </Select>
+              </div>
+
+              <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
+                <Select
+                  label="Gender"
+                  value={matchProfile.gender}
+                  onChange={(e) => setMatchProfile({ ...matchProfile, gender: e.target.value })}
+                >
+                  <option value="All">All / Male / Female</option>
+                  <option value="Female">Female</option>
+                  <option value="Male">Male</option>
+                </Select>
+                <Select
+                  label="Occupation"
+                  value={matchProfile.occupation}
+                  onChange={(e) => setMatchProfile({ ...matchProfile, occupation: e.target.value })}
+                >
+                  <option value="Any">Any / General Citizen</option>
+                  <option value="Farmer">Farmer</option>
+                  <option value="Student">Student</option>
+                  <option value="Laborer">Laborer</option>
+                </Select>
+                <Select
+                  label="Social Category"
+                  value={matchProfile.category}
+                  onChange={(e) => setMatchProfile({ ...matchProfile, category: e.target.value })}
+                >
+                  <option value="General">General</option>
+                  <option value="OBC">OBC</option>
+                  <option value="SC">SC</option>
+                  <option value="ST">ST</option>
+                </Select>
+              </div>
+
+              <Alert variant="info" title="Eligibility Match Disclaimer">
+                Preliminary match results. You may be eligible based on the parameters above. Final eligibility is strictly determined by official government authorities upon document verification.
+              </Alert>
+
+              <div className="flex justify-end gap-3 pt-2">
+                {matchingResults && (
+                  <Button variant="ghost" size="sm" onClick={() => setMatchingResults(null)}>
+                    Reset Results
+                  </Button>
+                )}
+                <Button variant="saffron" type="submit" isLoading={matchingLoading} icon={Search}>
+                  Calculate Matches
+                </Button>
+              </div>
+            </form>
+          </CardBody>
+        </Card>
+      )}
+
+      {/* Filter & Search Controls Bar */}
+      <div className="flex flex-col sm:flex-row gap-4">
+        <SearchBar
+          value={searchQuery}
+          onChange={setSearchQuery}
+          onClear={() => setSearchQuery('')}
+          placeholder="Search schemes by title or description..."
+          className="flex-1"
+        />
+
+        <Select
+          value={selectedCategory}
+          onChange={(e) => setSelectedCategory(e.target.value)}
+          className="sm:w-48"
+        >
+          <option value="All">All Categories</option>
+          <option value="Agriculture">Agriculture</option>
+          <option value="Healthcare">Healthcare</option>
+          <option value="Housing">Housing</option>
+          <option value="Education">Education</option>
+          <option value="Employment">Employment</option>
+          <option value="Welfare">Welfare</option>
+        </Select>
+
+        <Select
+          value={selectedState}
+          onChange={(e) => setSelectedState(e.target.value)}
+          className="sm:w-40"
+        >
+          <option value="All">All States</option>
+          <option value="Delhi">Delhi</option>
+          <option value="Maharashtra">Maharashtra</option>
+          <option value="Uttar Pradesh">Uttar Pradesh</option>
+        </Select>
       </div>
 
-      <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
-        
-        {/* Profile Details Form (Left Column) */}
-        <div className="lg:col-span-1 glass bg-white dark:bg-navy-900 border border-slate-200 dark:border-navy-800 rounded-2xl shadow-sm p-6 space-y-4">
-          <h3 className="text-base font-bold font-outfit text-navy-800 dark:text-white border-b border-slate-100 dark:border-navy-800 pb-2">
-            Demographic Profile Wizard
-          </h3>
-          
-          <form onSubmit={handleRecommend} className="space-y-4 text-xs font-semibold text-slate-500">
-            <div className="space-y-1">
-              <label className="uppercase tracking-wider">Age (Years)</label>
-              <input 
-                type="number" 
-                value={age} 
-                onChange={(e) => setAge(e.target.value)}
-                className="w-full px-3 py-2 border border-slate-200 dark:border-navy-800 rounded-lg bg-slate-50 dark:bg-navy-950 text-slate-800 dark:text-slate-100 focus:outline-none focus:border-saffron-500"
-              />
-            </div>
-
-            <div className="space-y-1">
-              <label className="uppercase tracking-wider">Gender</label>
-              <select 
-                value={gender} 
-                onChange={(e) => setGender(e.target.value)}
-                className="w-full px-3 py-2 border border-slate-200 dark:border-navy-800 rounded-lg bg-slate-50 dark:bg-navy-950 text-slate-800 dark:text-slate-100 focus:outline-none focus:border-saffron-500"
-              >
-                <option value="All">All / Prefer not to say</option>
-                <option value="Male">Male</option>
-                <option value="Female">Female</option>
-              </select>
-            </div>
-
-            <div className="space-y-1">
-              <label className="uppercase tracking-wider">State of Residence</label>
-              <input 
-                type="text" 
-                value={stateName} 
-                onChange={(e) => setStateName(e.target.value)}
-                placeholder="Madhya Pradesh, Delhi, etc."
-                className="w-full px-3 py-2 border border-slate-200 dark:border-navy-800 rounded-lg bg-slate-50 dark:bg-navy-950 text-slate-800 dark:text-slate-100 focus:outline-none focus:border-saffron-500"
-              />
-            </div>
-
-            <div className="space-y-1">
-              <label className="uppercase tracking-wider">Annual Family Income (₹)</label>
-              <input 
-                type="number" 
-                value={income} 
-                onChange={(e) => setIncome(e.target.value)}
-                className="w-full px-3 py-2 border border-slate-200 dark:border-navy-800 rounded-lg bg-slate-50 dark:bg-navy-950 text-slate-800 dark:text-slate-100 focus:outline-none focus:border-saffron-500"
-              />
-            </div>
-
-            <div className="space-y-1">
-              <label className="uppercase tracking-wider">Occupation</label>
-              <select 
-                value={occupation} 
-                onChange={(e) => setOccupation(e.target.value)}
-                className="w-full px-3 py-2 border border-slate-200 dark:border-navy-800 rounded-lg bg-slate-50 dark:bg-navy-950 text-slate-800 dark:text-slate-100 focus:outline-none focus:border-saffron-500"
-              >
-                <option value="Farmer">Farmer / Agriculture</option>
-                <option value="Laborer">Daily Wage Laborer</option>
-                <option value="Business Owner">Business Owner</option>
-                <option value="Unemployed">Unemployed</option>
-                <option value="Any">Other / Professional</option>
-              </select>
-            </div>
-
-            <div className="space-y-1">
-              <label className="uppercase tracking-wider">Social Category</label>
-              <select 
-                value={category} 
-                onChange={(e) => setCategory(e.target.value)}
-                className="w-full px-3 py-2 border border-slate-200 dark:border-navy-800 rounded-lg bg-slate-50 dark:bg-navy-950 text-slate-800 dark:text-slate-100 focus:outline-none focus:border-saffron-500"
-              >
-                <option value="General">General</option>
-                <option value="OBC">OBC</option>
-                <option value="SC">SC</option>
-                <option value="ST">ST</option>
-              </select>
-            </div>
-
-            <div className="flex gap-4 pt-2">
-              <label className="flex items-center gap-2 cursor-pointer">
-                <input 
-                  type="checkbox" 
-                  checked={disability} 
-                  onChange={(e) => setDisability(e.target.checked)}
-                  className="rounded text-saffron-500 focus:ring-saffron-500 dark:bg-navy-950 border-slate-200 dark:border-navy-800"
-                />
-                <span>Disabled (PWD)</span>
-              </label>
-
-              <label className="flex items-center gap-2 cursor-pointer">
-                <input 
-                  type="checkbox" 
-                  checked={student} 
-                  onChange={(e) => setStudent(e.target.checked)}
-                  className="rounded text-saffron-500 focus:ring-saffron-500 dark:bg-navy-950 border-slate-200 dark:border-navy-800"
-                />
-                <span>Active Student</span>
-              </label>
-            </div>
-
-            <button
-              type="submit"
-              disabled={loading}
-              className="w-full py-2.5 bg-navy-800 dark:bg-saffron-500 hover:bg-navy-900 dark:hover:bg-saffron-600 text-white font-bold rounded-lg shadow transition-all duration-200 flex items-center justify-center gap-1.5 text-xs"
+      {/* Scheme Cards Grid */}
+      {loading ? (
+        <div className="p-8 text-center text-xs text-slate-400">Loading government schemes...</div>
+      ) : displaySchemes.length === 0 ? (
+        <EmptyState
+          icon={BookOpen}
+          title="No Schemes Found"
+          description="Adjust your search criteria or state filters to discover active government welfare programs."
+        />
+      ) : (
+        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+          {displaySchemes.map((scheme) => (
+            <Card
+              key={scheme._id || scheme.title}
+              hoverable
+              onClick={() => setActiveSchemeModal(scheme)}
+              className="flex flex-col justify-between space-y-4"
             >
-              {loading ? <div className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin" /> : <>Match Eligible Schemes</>}
-            </button>
-          </form>
-        </div>
-
-        {/* Recommendations Output (Right 2 columns) */}
-        <div className="lg:col-span-2 space-y-6">
-          
-          {/* Narrative Summary card */}
-          {showResults && (
-            <div className="p-6 rounded-2xl glass bg-saffron-50/50 dark:bg-navy-900 border border-saffron-200/50 dark:border-navy-800 shadow-sm relative overflow-hidden">
-              <div className="absolute top-0 right-0 w-24 h-24 bg-saffron-500/10 rounded-full blur-xl pointer-events-none" />
-              <div className="flex items-center gap-2 mb-3 text-saffron-600 dark:text-saffron-400 font-extrabold font-outfit text-sm">
-                <Sparkles size={16} />
-                <span>AI Personal Qualification Summary</span>
-              </div>
-              <div className="prose dark:prose-invert text-xs text-slate-600 dark:text-slate-350 leading-relaxed whitespace-pre-line font-medium">
-                {narrativeSummary}
-              </div>
-            </div>
-          )}
-
-          {/* Cards list */}
-          {loading ? (
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-              <CardSkeleton />
-              <CardSkeleton />
-            </div>
-          ) : showResults ? (
-            <div className="space-y-4">
-              <h3 className="text-base font-bold font-outfit text-navy-800 dark:text-white flex items-center gap-2">
-                Eligible Schemes Match list ({recommendedSchemes.length})
-              </h3>
-              
-              {recommendedSchemes.length === 0 ? (
-                <div className="p-8 text-center glass bg-white dark:bg-navy-900 rounded-2xl border border-slate-200 dark:border-navy-800 space-y-2">
-                  <p className="text-sm font-semibold text-slate-400">No exact matches found in local directory.</p>
-                  <p className="text-xs text-slate-500">Try modifying income limits, category, or occupations to query broader national criteria.</p>
+              <div className="space-y-2">
+                <div className="flex justify-between items-start gap-2">
+                  <Badge variant="saffron" size="sm">{scheme.category}</Badge>
+                  <span className="text-[10px] font-bold text-slate-400 font-mono">{scheme.state === 'All' ? 'Central Scheme' : scheme.state}</span>
                 </div>
-              ) : (
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-                  {recommendedSchemes.map((scheme) => (
-                    <div 
-                      key={scheme._id} 
-                      className="p-6 rounded-2xl glass hover-card-trigger bg-white dark:bg-navy-900 border border-slate-200 dark:border-navy-800 flex flex-col justify-between"
-                    >
-                      <div className="space-y-3">
-                        <div className="flex justify-between items-start gap-2">
-                          <span className="text-[10px] bg-slate-100 dark:bg-navy-950 px-2 py-0.5 rounded font-bold text-slate-500 uppercase tracking-wider">
-                            {scheme.category}
-                          </span>
-                          <span className="text-[9px] bg-saffron-500/10 text-saffron-600 dark:text-saffron-400 px-1.5 py-0.5 rounded font-bold">
-                            {scheme.state === 'All' ? 'National' : scheme.state}
-                          </span>
-                        </div>
-                        <h4 className="text-sm font-bold text-navy-800 dark:text-white leading-snug">{scheme.title}</h4>
-                        <p className="text-[11px] text-slate-500 dark:text-slate-450 line-clamp-3">{scheme.description}</p>
-                        
-                        <div className="p-3 bg-slate-50 dark:bg-navy-950 rounded-xl space-y-1.5 border border-slate-100 dark:border-navy-850">
-                          <p className="text-[10px] text-slate-400 font-bold uppercase tracking-wider">Benefits Summary</p>
-                          <p className="text-[11px] text-slate-600 dark:text-slate-350 leading-relaxed font-semibold">{scheme.benefits}</p>
-                        </div>
-                      </div>
+                <h3 className="text-base font-bold font-outfit text-navy-800 dark:text-white leading-snug line-clamp-2">
+                  {scheme.title}
+                </h3>
+                <p className="text-xs text-slate-500 dark:text-slate-400 line-clamp-3 leading-relaxed">
+                  {scheme.description}
+                </p>
+              </div>
 
-                      <button
-                        onClick={() => handleApply(scheme.title)}
-                        disabled={appliedScheme === scheme.title}
-                        className="mt-6 w-full py-2 bg-navy-800 dark:bg-navy-950 dark:hover:bg-navy-900 text-white font-bold rounded-lg text-xs shadow hover:bg-navy-900 transition-colors flex items-center justify-center gap-1.5 disabled:opacity-50"
-                      >
-                        {appliedScheme === scheme.title ? (
-                          <div className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin" />
-                        ) : (
-                          <>Verify & Apply via Locker</>
-                        )}
-                      </button>
-                    </div>
+              <div className="p-3 rounded-xl bg-slate-50 dark:bg-navy-950 border border-slate-200 dark:border-navy-800 space-y-1">
+                <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wider block">Key Benefit</span>
+                <p className="text-xs font-bold text-emerald-600 dark:text-emerald-400 line-clamp-2">{scheme.benefits}</p>
+              </div>
+
+              <div className="pt-2 flex items-center justify-between">
+                <span className="text-[11px] font-bold text-saffron-600 dark:text-saffron-400 flex items-center gap-0.5">
+                  View Full Program Details &rarr;
+                </span>
+                <a
+                  href={scheme.applyUrl || 'https://www.myscheme.gov.in'}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  onClick={(e) => e.stopPropagation()}
+                >
+                  <Button variant="outline" size="sm" icon={ExternalLink}>
+                    Official Portal
+                  </Button>
+                </a>
+              </div>
+            </Card>
+          ))}
+        </div>
+      )}
+
+      {/* Scheme Detailed Modal */}
+      {activeSchemeModal && (
+        <Modal
+          isOpen={!!activeSchemeModal}
+          onClose={() => setActiveSchemeModal(null)}
+          title={activeSchemeModal.title}
+          subtitle={`Category: ${activeSchemeModal.category} • State: ${activeSchemeModal.state}`}
+          maxWidth="max-w-2xl"
+          footer={
+            <a href={activeSchemeModal.applyUrl || 'https://www.myscheme.gov.in'} target="_blank" rel="noopener noreferrer">
+              <Button variant="saffron" icon={ExternalLink}>
+                Apply on Official Portal
+              </Button>
+            </a>
+          }
+        >
+          <div className="space-y-5 text-xs text-slate-700 dark:text-slate-200">
+            <div>
+              <h4 className="font-bold text-navy-800 dark:text-white text-sm mb-1">Overview</h4>
+              <p className="leading-relaxed text-slate-600 dark:text-slate-350">{activeSchemeModal.description}</p>
+            </div>
+
+            <div className="p-4 rounded-xl bg-emerald-50 dark:bg-emerald-500/10 border border-emerald-200 dark:border-emerald-500/20 text-emerald-900 dark:text-emerald-300">
+              <h4 className="font-bold text-sm mb-1 flex items-center gap-1.5">
+                <Award size={16} className="text-emerald-600 dark:text-emerald-400" /> Program Benefits
+              </h4>
+              <p className="font-semibold leading-relaxed">{activeSchemeModal.benefits}</p>
+            </div>
+
+            {activeSchemeModal.requiredDocuments && (
+              <div>
+                <h4 className="font-bold text-navy-800 dark:text-white text-sm mb-2 flex items-center gap-1.5">
+                  <FileText size={16} className="text-saffron-500" /> Required Documents
+                </h4>
+                <div className="flex flex-wrap gap-2">
+                  {activeSchemeModal.requiredDocuments.map((doc, idx) => (
+                    <Badge key={idx} variant="neutral" size="md">{doc}</Badge>
                   ))}
                 </div>
-              )}
-            </div>
-          ) : (
-            <div className="p-12 text-center glass bg-white dark:bg-navy-900 rounded-3xl border border-slate-200 dark:border-navy-800 flex flex-col items-center justify-center space-y-3">
-              <span className="text-4xl animate-bounce">📋</span>
-              <h3 className="text-base font-bold text-navy-800 dark:text-white">Awaiting Profile Input</h3>
-              <p className="text-xs text-slate-400 max-w-sm">Fill in the Demographic Profile Wizard details on the left and submit to search verified central/state scheme databases.</p>
-            </div>
-          )}
+              </div>
+            )}
 
-        </div>
+            <div className="grid grid-cols-2 gap-4 p-4 rounded-xl bg-slate-50 dark:bg-navy-950 border border-slate-200 dark:border-navy-800">
+              <div>
+                <span className="text-[10px] text-slate-400 font-bold uppercase tracking-wider block">Official Ministry Source</span>
+                <a href={activeSchemeModal.officialSource || 'https://www.myscheme.gov.in'} target="_blank" rel="noopener noreferrer" className="text-saffron-600 dark:text-saffron-400 font-bold hover:underline">
+                  {activeSchemeModal.ministry || 'myScheme Government Portal'} &rarr;
+                </a>
+              </div>
+              <div>
+                <span className="text-[10px] text-slate-400 font-bold uppercase tracking-wider block">Last Verified Date</span>
+                <span className="font-mono font-bold">{activeSchemeModal.lastVerified || '2026-08-15'}</span>
+              </div>
+            </div>
 
-      </div>
+            <Alert variant="info" title="Official Application Notice">
+              Applications must be submitted strictly on official government domain portals (`.gov.in`). Smart Bharat AI never charges fees or collects bank passwords.
+            </Alert>
+          </div>
+        </Modal>
+      )}
 
     </div>
   );
