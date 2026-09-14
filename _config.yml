@@ -1,0 +1,20 @@
+# GitHub Pages Configuration
+# Exclude README.md so Jekyll uses index.html (the React Web App) as the root homepage
+exclude:
+  - README.md
+  - backend
+  - frontend
+  - api
+  - node_modules
+  - package.json
+  - package-lock.json
+  - vercel.json
+  - .env.example
+
+include:
+  - index.html
+  - 404.html
+  - assets
+  - registerSW.js
+  - sw.js
+  - manifest.json
