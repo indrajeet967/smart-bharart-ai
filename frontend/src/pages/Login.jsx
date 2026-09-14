@@ -53,7 +53,8 @@ export default function Login() {
     }
   };
 
-  const handleGoogleLogin = async () => {
+  const handleGoogleLogin = async (e) => {
+    if (e && e.preventDefault) e.preventDefault();
     setError('');
     setSubmitting(true);
     try {
@@ -206,6 +207,7 @@ export default function Login() {
 
           {/* Google Auth Button */}
           <button
+            type="button"
             onClick={handleGoogleLogin}
             disabled={submitting}
             className="w-full py-2.5 bg-white dark:bg-navy-950 text-slate-700 dark:text-slate-200 font-bold border border-slate-200 dark:border-navy-800 rounded-lg shadow-sm hover:bg-slate-50 dark:hover:bg-navy-900 transition-all flex items-center justify-center gap-2.5 text-sm"
