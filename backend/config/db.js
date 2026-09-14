@@ -3,30 +3,33 @@ const fs = require('fs');
 const path = require('path');
 
 let isMock = false;
-let mockDbPath = path.join(__dirname, '..', 'db_fallback.json');
+const isVercel = Boolean(process.env.VERCEL || process.env.AWS_LAMBDA_FUNCTION_NAME);
 
-// Initialize mock DB file if it doesn't exist
-if (!fs.existsSync(mockDbPath)) {
-  fs.writeFileSync(mockDbPath, JSON.stringify({
-    users: [],
-    complaints: [],
-    schemes: [],
-    documents: [],
-    notifications: [],
-    chatHistory: []
-  }, null, 2));
-}
+// On Vercel, use /tmp directory or in-memory fallback
+let mockDbPath = isVercel
+  ? path.join('/tmp', 'db_fallback.json')
+  : path.join(__dirname, '..', 'db_fallback.json');
+
+const seedDbPath = path.join(__dirname, '..', 'db_fallback.json');
+
+let inMemoryMockDb = {
+  users: [],
+  complaints: [],
+  schemes: [],
+  documents: [],
+  notifications: [],
+  chatHistory: []
+};
 
 const connectDB = async () => {
   const uri = process.env.MONGODB_URI;
   if (!uri) {
-    console.warn("⚠️ MONGODB_URI not found in env. Falling back to local JSON database storage.");
+    console.warn("⚠️ MONGODB_URI not found in env. Falling back to JSON database storage.");
     isMock = true;
     return;
   }
 
   try {
-    // Attempt Mongoose connection with timeout
     mongoose.set('strictQuery', false);
     await mongoose.connect(uri, {
       serverSelectionTimeoutMS: 3000
@@ -34,26 +37,34 @@ const connectDB = async () => {
     console.log("✅ MongoDB Connected Successfully");
   } catch (err) {
     console.error("❌ MongoDB connection failed:", err.message);
-    console.warn("⚠️ Falling back to local JSON database storage (db_fallback.json).");
+    console.warn("⚠️ Falling back to JSON database storage.");
     isMock = true;
   }
 };
 
-// Simple helpers to read/write JSON mock database
+// Safe helper to read JSON mock database
 const getMockData = () => {
   try {
-    const raw = fs.readFileSync(mockDbPath, 'utf8');
-    return JSON.parse(raw);
+    if (fs.existsSync(mockDbPath)) {
+      const raw = fs.readFileSync(mockDbPath, 'utf8');
+      return JSON.parse(raw);
+    }
+    if (fs.existsSync(seedDbPath)) {
+      const raw = fs.readFileSync(seedDbPath, 'utf8');
+      return JSON.parse(raw);
+    }
   } catch (e) {
-    return { users: [], complaints: [], schemes: [], documents: [], notifications: [], chatHistory: [] };
+    console.warn("Failed reading mock DB, falling back to memory:", e.message);
   }
+  return inMemoryMockDb;
 };
 
 const saveMockData = (data) => {
+  inMemoryMockDb = data;
   try {
     fs.writeFileSync(mockDbPath, JSON.stringify(data, null, 2));
   } catch (e) {
-    console.error("Failed to write to mock database file:", e);
+    // Read-only environment safe fallback
   }
 };
 

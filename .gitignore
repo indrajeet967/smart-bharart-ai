@@ -5,5 +5,7 @@ node_modules - Copy/
 !.env.example
 
 dist/
+frontend/dist/
 build/
 .vite/
+.vercel
