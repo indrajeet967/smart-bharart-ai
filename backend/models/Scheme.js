@@ -6,8 +6,6 @@ const SchemeSchema = new mongoose.Schema({
   category: { type: String, required: true }, // e.g., 'Agriculture', 'Healthcare', 'Education', 'Housing'
   state: { type: String, default: 'All' }, // 'All' or specific state name
   benefits: { type: String, required: true },
-  officialSource: { type: String, default: '' },
-  eligibilityVerified: { type: Boolean, default: false },
   eligibility: {
     ageMin: { type: Number, default: 0 },
     ageMax: { type: Number, default: 120 },

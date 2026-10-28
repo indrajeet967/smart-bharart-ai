@@ -5,36 +5,12 @@ const { GoogleGenerativeAI } = require('@google/generative-ai');
 const db = require('../config/db');
 Object.defineProperty(global, 'isMock', { get: () => db.isMock, configurable: true });
 Object.defineProperty(global, 'mockDb', { get: () => db.mockDb, configurable: true });
-const {
-  uploadPrivateEvidence,
-  getPrivateEvidenceUrl,
-  deletePrivateEvidence,
-  isCloudinaryConfigured
-} = require('../config/cloudinary');
+const { uploadImage } = require('../config/cloudinary');
 const Complaint = require('../models/Complaint');
 const User = require('../models/User');
-const { verifyToken, adminOnly } = require('../middleware/authMiddleware');
+const { optionalAuth, verifyToken } = require('../middleware/authMiddleware');
 
-const serializeComplaint = (complaint) => {
-  const record = complaint.toObject ? complaint.toObject() : { ...complaint };
-  const imageUrl = record.privatePublicId
-    ? getPrivateEvidenceUrl(record.privatePublicId, record.imageFormat || '')
-    : record.imageUrl || '';
-  delete record.privatePublicId;
-  delete record.imageFormat;
-  return { ...record, imageUrl };
-};
-
-const upload = multer({
-  storage: multer.memoryStorage(),
-  limits: { fileSize: 5 * 1024 * 1024 },
-  fileFilter: (req, file, callback) => {
-    if (!['image/jpeg', 'image/png', 'image/webp'].includes(file.mimetype)) {
-      return callback(new Error('Evidence must be a JPEG, PNG, or WebP image.'));
-    }
-    callback(null, true);
-  }
-});
+const upload = multer({ storage: multer.memoryStorage() });
 
 // Helper function to auto-detect category and priority using Gemini or Keyword Fallback
 async function analyzeIssue(description, categorySelected, fileBuffer, mimeType) {
@@ -156,25 +132,18 @@ async function rewardAndNotifyUser(email, points, notifTitle, notifContent) {
 
 // POST /api/complaints/report
 // Lodge a new complaint
-router.post('/report', verifyToken, upload.single('photo'), async (req, res) => {
-  const { description, category, lat, lng, address } = req.body;
-  const email = req.user.email;
+router.post('/report', optionalAuth, upload.single('photo'), async (req, res) => {
+  const { description, category, citizenEmail, lat, lng, address } = req.body;
+  const email = (req.user && req.user.email) || citizenEmail;
 
-  if (typeof description !== 'string' || !description.trim() || description.length > 5000) {
-    return res.status(400).json({ error: 'A description between 1 and 5000 characters is required.' });
-  }
-  if ((lat !== undefined && lat !== '' && (!Number.isFinite(Number(lat)) || Number(lat) < -90 || Number(lat) > 90)) ||
-      (lng !== undefined && lng !== '' && (!Number.isFinite(Number(lng)) || Number(lng) < -180 || Number(lng) > 180))) {
-    return res.status(400).json({ error: 'Location coordinates must be valid numbers.' });
-  }
-  if (req.file && !isCloudinaryConfigured) {
-    return res.status(503).json({ error: 'Private evidence storage is not configured. No complaint was submitted.' });
+  if (!description || !email) {
+    return res.status(400).json({ error: 'Description and citizen email are required.' });
   }
 
-  let uploadedEvidence = null;
   try {
+    let imageUrl = '';
     if (req.file) {
-      uploadedEvidence = await uploadPrivateEvidence(req.file.buffer, req.file.originalname);
+      imageUrl = await uploadImage(req.file.buffer, req.file.originalname);
     }
 
     const aiAnalysis = await analyzeIssue(
@@ -187,27 +156,29 @@ router.post('/report', verifyToken, upload.single('photo'), async (req, res) => 
     const year = new Date().getFullYear();
     const randomNum = Math.floor(10000 + Math.random() * 90000);
     const complaintId = `SB-${year}-${randomNum}`;
+    const expectedRes = new Date();
+    expectedRes.setDate(expectedRes.getDate() + 7);
+
     const initialTimeline = [
-      { status: 'Submitted', date: new Date(), note: 'Complaint received by Smart Bharat.' }
+      { status: 'Submitted', date: new Date(), note: 'Complaint submitted by citizen.' },
+      { status: 'Registered', date: new Date(), note: `Complaint registered in municipal portal. Assigned to ${aiAnalysis.category || 'Municipal'} Department.` }
     ];
 
     const complaintDetails = {
       complaintId,
       citizenEmail: email,
-      submissionChannel: 'smart-bharat',
       description,
       category: aiAnalysis.category || category || 'Other',
       priority: aiAnalysis.priority || 'Medium',
-      imageUrl: '',
-      privatePublicId: uploadedEvidence?.publicId || '',
-      imageFormat: uploadedEvidence?.format || '',
+      imageUrl,
       location: {
         lat: lat ? parseFloat(lat) : null,
         lng: lng ? parseFloat(lng) : null,
         address: address || 'Location not tagged'
       },
-      status: 'Submitted',
-      department: 'Unassigned',
+      status: 'Registered',
+      department: `${aiAnalysis.category || 'Municipal'} Department`,
+      expectedResolution: expectedRes,
       timeline: initialTimeline,
       rewardsEarned: 20
     };
@@ -231,25 +202,18 @@ router.post('/report', verifyToken, upload.single('photo'), async (req, res) => 
     res.status(201).json({
       success: true,
       message: 'Complaint registered successfully',
-      complaint: serializeComplaint(savedComplaint),
+      complaint: savedComplaint,
       pointsAwarded: 20
     });
   } catch (err) {
-    if (uploadedEvidence?.publicId) {
-      try {
-        await deletePrivateEvidence(uploadedEvidence.publicId);
-      } catch (cleanupError) {
-        console.error('Failed to clean up private evidence after complaint failure:', cleanupError);
-      }
-    }
     console.error("Complaint reporting error:", err);
     res.status(500).json({ error: 'Failed to lodge complaint' });
   }
 });
 
 // GET /api/complaints/track/:id
-// Complaint identifiers are private account data, so only the owner or an admin may view them.
-router.get('/track/:id', verifyToken, async (req, res) => {
+// Track a single complaint by ID
+router.get('/track/:id', async (req, res) => {
   const { id } = req.params;
 
   try {
@@ -263,11 +227,8 @@ router.get('/track/:id', verifyToken, async (req, res) => {
     if (!complaint) {
       return res.status(404).json({ error: 'Complaint ID not found.' });
     }
-    if (req.user.role !== 'admin' && complaint.citizenEmail !== req.user.email) {
-      return res.status(404).json({ error: 'Complaint ID not found.' });
-    }
 
-    res.json(serializeComplaint(complaint));
+    res.json(complaint);
   } catch (err) {
     console.error("Track complaint error:", err);
     res.status(500).json({ error: 'Failed to retrieve complaint details.' });
@@ -276,11 +237,8 @@ router.get('/track/:id', verifyToken, async (req, res) => {
 
 // GET /api/complaints/user/:email
 // Get user's own complaints
-router.get('/user/:email', verifyToken, async (req, res) => {
+router.get('/user/:email', async (req, res) => {
   const { email } = req.params;
-  if (req.user.role !== 'admin' && email.toLowerCase() !== req.user.email.toLowerCase()) {
-    return res.status(403).json({ error: 'You can only view your own complaints.' });
-  }
 
   try {
     let complaintsList = [];
@@ -289,7 +247,7 @@ router.get('/user/:email', verifyToken, async (req, res) => {
     } else {
       complaintsList = await Complaint.find({ citizenEmail: email }).sort({ createdAt: -1 });
     }
-    res.json(complaintsList.map(serializeComplaint));
+    res.json(complaintsList);
   } catch (err) {
     console.error("User complaints error:", err);
     res.status(500).json({ error: 'Failed to retrieve user complaints.' });
@@ -298,7 +256,7 @@ router.get('/user/:email', verifyToken, async (req, res) => {
 
 // GET /api/complaints/admin/all
 // Admin view all complaints
-router.get('/admin/all', verifyToken, adminOnly, async (req, res) => {
+router.get('/admin/all', verifyToken, async (req, res) => {
   try {
     let allComplaints = [];
     if (db.isMock) {
@@ -306,7 +264,7 @@ router.get('/admin/all', verifyToken, adminOnly, async (req, res) => {
     } else {
       allComplaints = await Complaint.find({}).sort({ createdAt: -1 });
     }
-    res.json(allComplaints.map(serializeComplaint));
+    res.json(allComplaints);
   } catch (err) {
     console.error("Admin complaints error:", err);
     res.status(500).json({ error: 'Failed to retrieve admin complaints list.' });
@@ -315,7 +273,7 @@ router.get('/admin/all', verifyToken, adminOnly, async (req, res) => {
 
 // POST /api/complaints/admin/update/:id
 // Admin update status (Submitted -> Registered -> Assigned -> In Progress -> Resolved -> Closed)
-router.post('/admin/update/:id', verifyToken, adminOnly, async (req, res) => {
+router.post('/admin/update/:id', verifyToken, async (req, res) => {
   const { id } = req.params;
   const { status, note, department } = req.body;
 
@@ -381,62 +339,19 @@ router.post('/admin/update/:id', verifyToken, adminOnly, async (req, res) => {
         complaint.citizenEmail,
         0,
         `Complaint Update (${id})`,
-        `Your Smart Bharat record ${id} status updated to "${status}". Note: ${note || 'Status updated by a Smart Bharat administrator.'}`
+        `Your complaint ${id} status updated to "${status}". Note: ${note || 'Status updated by department.'}`
       );
     }
 
     res.json({
       success: true,
       message: `Complaint status updated to ${status}`,
-      complaint: serializeComplaint(updatedComplaint),
+      complaint: updatedComplaint,
       pointsAwarded: rewardPointsToAward
     });
   } catch (err) {
     console.error("Admin update error:", err);
     res.status(500).json({ error: 'Failed to update complaint status.' });
-  }
-});
-
-// DELETE /api/complaints/:id
-// Delete a complaint from Smart Bharat account (with ownership check)
-router.delete('/:id', verifyToken, async (req, res) => {
-  const { id } = req.params;
-  const userEmail = req.user.email;
-
-  try {
-    let complaint = null;
-    if (db.isMock) {
-      complaint = db.mockDb.findOne('complaints', { complaintId: id });
-    } else {
-      complaint = await Complaint.findOne({ complaintId: id });
-    }
-
-    if (!complaint) {
-      return res.status(404).json({ error: 'Complaint not found.' });
-    }
-
-    // Ownership check: must match citizenEmail or admin
-    if (req.user.role !== 'admin' && complaint.citizenEmail !== userEmail) {
-      return res.status(404).json({ error: 'Complaint not found.' });
-    }
-
-    if (complaint.privatePublicId) {
-      await deletePrivateEvidence(complaint.privatePublicId);
-    }
-
-    if (db.isMock) {
-      db.mockDb.deleteMany('complaints', { complaintId: id });
-    } else {
-      await Complaint.deleteOne({ complaintId: id });
-    }
-
-    res.json({
-      success: true,
-      message: `Complaint ${id} deleted from your Smart Bharat dashboard. Note: If this complaint was submitted to an official government portal, deleting it here does not cancel the official government grievance log.`
-    });
-  } catch (err) {
-    console.error("Delete complaint error:", err);
-    res.status(500).json({ error: 'Failed to delete complaint record.' });
   }
 });
 
