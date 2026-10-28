@@ -9,6 +9,22 @@ const UserSchema = new mongoose.Schema({
   phone: { type: String, default: '' },
   photoURL: { type: String, default: '' },
   state: { type: String, default: '' },
+  preferredLocation: {
+    type: {
+      city: { type: String, default: '' },
+      state: { type: String, default: '' },
+      district: { type: String, default: '' },
+      pincode: { type: String, default: '' },
+      lat: { type: Number, default: null },
+      lng: { type: Number, default: null },
+      displayName: { type: String, default: '' }
+    },
+    default: undefined
+  },
+  isVerified: { type: Boolean, default: false },
+  otp: { type: String, default: null },
+  otpExpires: { type: Date, default: null },
+  otpAttempts: { type: Number, default: 0 },
   interests: { type: [String], default: [] },
   rewardPoints: { type: Number, default: 0 },
   level: { type: Number, default: 1 },
@@ -30,7 +46,12 @@ UserSchema.pre('save', async function (next) {
 
 // Instance method to compare password
 UserSchema.methods.comparePassword = async function (candidatePassword) {
-  return await bcrypt.compare(candidatePassword, this.password);
+  if (!candidatePassword || !this.password) return false;
+  try {
+    return await bcrypt.compare(candidatePassword, this.password);
+  } catch (e) {
+    return false;
+  }
 };
 
 module.exports = mongoose.models.User || mongoose.model('User', UserSchema);

@@ -1,10 +1,12 @@
 import React, { useState, useEffect } from 'react';
 import { useAuth } from '../context/AuthContext';
 import { useLanguage } from '../context/LanguageContext';
+import { useLocation as useAppLocation } from '../context/LocationContext';
 import { useToast } from '../context/ToastContext';
 import { 
   AlertTriangle, Camera, MapPin, CheckCircle, UploadCloud, RefreshCw, 
-  Sparkles, WifiOff, ChevronRight, ChevronLeft, FileText, Check, ShieldCheck 
+  Sparkles, WifiOff, ChevronRight, ChevronLeft, FileText, Check, ShieldCheck, ExternalLink,
+  Navigation, Info
 } from 'lucide-react';
 import axios from 'axios';
 import Card, { CardHeader, CardTitle, CardBody } from '../components/ui/Card';
@@ -15,10 +17,12 @@ import Select from '../components/ui/Select';
 import Alert from '../components/ui/Alert';
 import Badge from '../components/ui/Badge';
 import Modal from '../components/ui/Modal';
+import { COMPLAINT_ROUTING } from '../data/governmentKnowledge';
 
 export default function ReportIssue() {
   const { profile, refetchProfile } = useAuth();
   const { t } = useLanguage();
+  const { selectedLocation, hasCoordinates, detectCurrentLocation, detecting } = useAppLocation();
   const toast = useToast();
 
   const [currentStep, setCurrentStep] = useState(1); // 1: Category, 2: Location, 3: Evidence, 4: Description, 5: Review
@@ -52,46 +56,65 @@ export default function ReportIssue() {
 
   // Monitor offline queue size
   useEffect(() => {
-    const queue = JSON.parse(localStorage.getItem('sb_offline_reports')) || [];
+    const queue = JSON.parse(localStorage.getItem('sb_offline_reports') || '[]');
     setOfflineQueueCount(queue.length);
   }, []);
 
-  // HTML5 Location Pinning
-  const handlePinLocation = () => {
-    if (!navigator.geolocation) {
-      toast.error("Geolocation is not supported by your browser.");
-      return;
+  // Auto-fill from LocationContext when it has coordinates
+  useEffect(() => {
+    if (hasCoordinates && selectedLocation.lat && !lat) {
+      setLat(String(selectedLocation.lat));
+      setLng(String(selectedLocation.lng));
+      if (selectedLocation.displayName && selectedLocation.displayName !== 'Select Location') {
+        setAddress(selectedLocation.displayName);
+      }
     }
+  }, [hasCoordinates, selectedLocation.lat]);
 
+  // Derived complaint routing suggestion
+  const routingInfo = (() => {
+    const routing = COMPLAINT_ROUTING[category] || COMPLAINT_ROUTING.default;
+    const userState = selectedLocation?.state || profile?.state || '';
+    return userState ? routing.stateFallback?.[userState] || null : null;
+  })();
+
+  // GPS location pinning
+  const handlePinLocation = async () => {
     setLocating(true);
-    navigator.geolocation.getCurrentPosition(
-      (position) => {
-        const latitude = position.coords.latitude.toFixed(6);
-        const longitude = position.coords.longitude.toFixed(6);
-        setLat(latitude);
-        setLng(longitude);
-        setAddress(`Municipal Ward 14, Coordinates: ${latitude}N, ${longitude}E`);
-        setLocating(false);
-        toast.success("GPS coordinates detected successfully!");
-      },
-      (err) => {
-        console.warn("Geolocation fallback:", err.message);
-        setLat("28.613912");
-        setLng("77.209012");
-        setAddress("Connaught Place, New Delhi, Delhi 110001");
-        setLocating(false);
-        toast.info("Using default municipal sector location.");
-      },
-      { timeout: 8000 }
-    );
+    const result = await detectCurrentLocation();
+    if (result.success) {
+      const loc = result.location;
+      setLat(String(loc.lat.toFixed(6)));
+      setLng(String(loc.lng.toFixed(6)));
+      setAddress(loc.displayName || `${loc.lat.toFixed(4)}°N, ${loc.lng.toFixed(4)}°E`);
+      toast.success('GPS coordinates detected successfully!');
+    } else {
+      // Use whatever is in selectedLocation already
+      if (hasCoordinates) {
+        setLat(String(selectedLocation.lat));
+        setLng(String(selectedLocation.lng));
+        setAddress(selectedLocation.displayName);
+        toast.info('Using your selected location.');
+      } else {
+        toast.error(result.error || 'Could not detect location. Enter address manually.');
+      }
+    }
+    setLocating(false);
   };
 
   const handlePhotoChange = (e) => {
     const file = e.target.files[0];
     if (!file) return;
 
+    if (!['image/jpeg', 'image/png', 'image/webp'].includes(file.type)) {
+      toast.error('Evidence must be a JPEG, PNG, or WebP image.');
+      e.target.value = '';
+      return;
+    }
+
     if (file.size > 5 * 1024 * 1024) {
       toast.error("Photo size exceeds 5MB limit.");
+      e.target.value = '';
       return;
     }
 
@@ -122,18 +145,17 @@ export default function ReportIssue() {
         address,
         photoBase64: photoPreview,
         photoName: photo ? photo.name : 'issue_photo.jpg',
-        citizenEmail: profile?.email || 'guest@gmail.com',
         timestamp: new Date().toISOString()
       };
 
-      const queue = JSON.parse(localStorage.getItem('sb_offline_reports')) || [];
+      const queue = JSON.parse(localStorage.getItem('sb_offline_reports') || '[]');
       queue.push(offlineReport);
       localStorage.setItem('sb_offline_reports', JSON.stringify(queue));
       setOfflineQueueCount(queue.length);
 
       setSubmitting(false);
       resetForm();
-      toast.info("Offline Mode: Civic report queued locally. It will auto-sync when online!");
+      toast.info('Saved on this device only. This report has not been submitted to Smart Bharat or a government portal.');
       return;
     }
 
@@ -141,7 +163,6 @@ export default function ReportIssue() {
     const formData = new FormData();
     formData.append('category', category);
     formData.append('description', description);
-    formData.append('citizenEmail', profile?.email || 'guest@gmail.com');
     if (photo) {
       formData.append('photo', photo);
     }
@@ -155,39 +176,22 @@ export default function ReportIssue() {
         timeout: 3000
       });
 
-      if (res.data.success) {
+      if (res.data.success && res.data.complaint?.complaintId) {
         setSubmittedComplaint(res.data.complaint);
-        toast.success(`Complaint ${res.data.complaint.complaintId} registered! +20 Civic Points earned.`);
-        if (refetchProfile) refetchProfile();
+        toast.success(`Smart Bharat complaint ${res.data.complaint.complaintId} was received.`);
+        if (refetchProfile) {
+          try {
+            await refetchProfile();
+          } catch (refreshError) {
+            console.error('Complaint was received, but the profile refresh failed:', refreshError);
+          }
+        }
         resetForm();
+      } else {
+        throw new Error('The server did not confirm receipt. Your report has not been registered.');
       }
     } catch (err) {
-      console.warn("API server unavailable, storing complaint in local storage.");
-      const newComplaint = {
-        _id: 'cmp_' + Date.now(),
-        complaintId: 'SB-2026-' + Math.floor(10000 + Math.random() * 90000),
-        category,
-        description,
-        address: address || 'Municipal Sector 14, Coordinates: 28.6139N, 77.2090E',
-        citizenEmail: profile?.email || 'guest@gmail.com',
-        status: 'Submitted',
-        priority: category.includes('Road') || category.includes('Electricity') ? 'High' : 'Medium',
-        department: category.includes('Road') ? 'Public Works Dept (PWD)' : 'Municipal Waste Management',
-        imageUrl: photoPreview || 'https://images.unsplash.com/photo-1515162816999-a0c47dc192f7?auto=format&fit=crop&q=80&w=400',
-        createdAt: new Date().toISOString(),
-        timeline: [
-          { status: 'Submitted', timestamp: new Date().toISOString(), note: 'Complaint logged into municipal portal.' }
-        ]
-      };
-
-      const existing = JSON.parse(localStorage.getItem('sb_mock_complaints')) || [];
-      existing.unshift(newComplaint);
-      localStorage.setItem('sb_mock_complaints', JSON.stringify(existing));
-
-      setSubmittedComplaint(newComplaint);
-      toast.success(`Complaint ${newComplaint.complaintId} registered! +20 Civic Points earned.`);
-      if (profile?.addMockPoints) profile.addMockPoints(20, 'Civic Guard');
-      resetForm();
+      toast.error(err.response?.data?.error || 'Submission could not be confirmed. Check your tracker before trying again; your entries remain in the form.');
     } finally {
       setSubmitting(false);
     }
@@ -211,14 +215,14 @@ export default function ReportIssue() {
     }
 
     setSyncingOffline(true);
-    const queue = JSON.parse(localStorage.getItem('sb_offline_reports')) || [];
+    const queue = JSON.parse(localStorage.getItem('sb_offline_reports') || '[]');
+    const remainingQueue = [];
     let syncedCount = 0;
 
-    for (let report of queue) {
+    for (const report of queue) {
       const formData = new FormData();
       formData.append('category', report.category);
       formData.append('description', report.description);
-      formData.append('citizenEmail', report.citizenEmail);
       formData.append('lat', report.lat);
       formData.append('lng', report.lng);
       formData.append('address', report.address);
@@ -228,23 +232,43 @@ export default function ReportIssue() {
           const resBlob = await fetch(report.photoBase64);
           const blob = await resBlob.blob();
           formData.append('photo', blob, report.photoName);
-        } catch (e) {}
+        } catch (error) {
+          console.error('Could not restore a queued report image:', error);
+          remainingQueue.push(report);
+          continue;
+        }
       }
 
       try {
-        await axios.post('/api/complaints/report', formData, {
+        const response = await axios.post('/api/complaints/report', formData, {
           headers: { 'Content-Type': 'multipart/form-data' }
         });
-        syncedCount++;
-      } catch (err) {}
+        if (response.data.success && response.data.complaint?.complaintId) {
+          syncedCount++;
+        } else {
+          remainingQueue.push(report);
+        }
+      } catch (error) {
+        remainingQueue.push(report);
+      }
     }
 
-    const remainingQueue = queue.slice(syncedCount);
     localStorage.setItem('sb_offline_reports', JSON.stringify(remainingQueue));
     setOfflineQueueCount(remainingQueue.length);
     setSyncingOffline(false);
-    toast.success(`Synced ${syncedCount} queued reports! +${syncedCount * 20} Civic Points earned.`);
-    if (refetchProfile) refetchProfile();
+    if (syncedCount) {
+      toast.success(`${syncedCount} queued report(s) received by Smart Bharat.`);
+      if (refetchProfile) {
+        try {
+          await refetchProfile();
+        } catch (error) {
+          console.error('Could not refresh the account after report synchronization:', error);
+        }
+      }
+    }
+    if (remainingQueue.length) {
+      toast.error(`${remainingQueue.length} report(s) remain on this device and were not submitted.`);
+    }
   };
 
   return (
@@ -253,16 +277,27 @@ export default function ReportIssue() {
       {/* Page Header */}
       <PageHeader
         title="Report Civic Issue"
-        description="Step-by-step complaint registration wizard. Upload evidence and location to automatically dispatch municipal maintenance crews."
+        description="Prepare a civic issue report, optionally send it to Smart Bharat for internal tracking, or continue to the recommended official grievance portal."
         icon={AlertTriangle}
         badge="Multi-Step Wizard"
+        actions={routingInfo?.url && (
+          <a
+            href={routingInfo.url}
+            target="_blank"
+            rel="noopener noreferrer"
+          >
+            <Button variant="outline" size="sm" icon={ExternalLink}>
+              Open {routingInfo.portal || 'suggested grievance portal'}
+            </Button>
+          </a>
+        )}
       />
 
       {/* Offline Sync Banner Alerts */}
       {offlineQueueCount > 0 && (
         <Alert variant="warning" title={`${offlineQueueCount} Offline Reports Pending Sync`}>
           <div className="flex items-center justify-between gap-4 mt-1">
-            <span>You have reports stored locally in offline mode. Click sync to register them now.</span>
+            <span>These drafts are stored only on this device and have not been submitted. Sync sends them to Smart Bharat after you sign in.</span>
             <Button variant="saffron" size="sm" onClick={handleSyncOffline} isLoading={syncingOffline}>
               <RefreshCw size={14} className={syncingOffline ? 'animate-spin' : ''} /> Sync Queue
             </Button>
@@ -333,6 +368,49 @@ export default function ReportIssue() {
               })}
             </div>
 
+            {/* Smart Routing Hint */}
+            {routingInfo && (
+              <div className="p-4 rounded-xl bg-blue-50 dark:bg-blue-500/10 border border-blue-200 dark:border-blue-500/20 space-y-2">
+                <p className="text-xs font-bold text-blue-700 dark:text-blue-300 flex items-center gap-1.5">
+                  <Info size={13} /> Suggested external portal for "{category}"
+                </p>
+                <p className="text-xs text-blue-600 dark:text-blue-400 font-semibold">
+                    {routingInfo.portal || routingInfo.department}
+                </p>
+                  {routingInfo.department && (
+                    <p className="text-xs text-blue-600 dark:text-blue-400">
+                      Suggested department: <strong>{routingInfo.department}</strong>
+                    </p>
+                  )}
+                  {routingInfo.note && (
+                    <p className="text-xs text-blue-600 dark:text-blue-400">{routingInfo.note}</p>
+                  )}
+                {routingInfo.helpline && (
+                  <p className="text-xs text-blue-500 dark:text-blue-400">
+                    Helpline: <strong>{routingInfo.helpline}</strong>
+                  </p>
+                )}
+                {routingInfo.url && (
+                  <a
+                    href={routingInfo.url}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="inline-flex items-center gap-1 text-xs font-bold text-blue-700 dark:text-blue-300 hover:underline"
+                  >
+                    <ExternalLink size={11} /> Open Suggested Portal
+                  </a>
+                )}
+                <p className="text-[11px] text-blue-600 dark:text-blue-400">
+                  Catalog routing suggestion only; verify the authority and portal before filing. This link opens the authority's website; Smart Bharat does not submit your report or transfer its attachments there.
+                </p>
+              </div>
+            )}
+            {!routingInfo && (
+              <Alert variant="warning" title="Confirm the responsible authority">
+                A state- and category-specific grievance destination is not configured for this location. Contact your municipal/local authority or use the official state grievance directory; CPGRAMS is intended for eligible central-government grievances, not every local civic issue.
+              </Alert>
+            )}
+
             <div className="flex justify-end pt-4 border-t border-slate-150 dark:border-navy-800">
               <Button variant="saffron" icon={ChevronRight} iconPosition="right" onClick={() => setCurrentStep(2)}>
                 Next: Location
@@ -372,7 +450,7 @@ export default function ReportIssue() {
               label="Manual Landmark / Street Address" 
               value={address} 
               onChange={(e) => setAddress(e.target.value)}
-              placeholder="e.g. Near HDFC Bank, Sector 4 Main Road, Connaught Place"
+              placeholder={`e.g. Near Hanuman Mandir, ${selectedLocation?.city || 'your area'}, Ward No. 5`}
               hint="Provide specific landmarks to help municipal teams identify the spot."
             />
 
@@ -392,7 +470,7 @@ export default function ReportIssue() {
           <div className="space-y-6">
             <div>
               <h3 className="text-lg font-bold font-outfit text-navy-800 dark:text-white">Step 3: Upload Photo Evidence</h3>
-              <p className="text-xs text-slate-500 dark:text-slate-400 mt-1">Upload a clear photo of the issue for Gemini AI validation.</p>
+              <p className="text-xs text-slate-500 dark:text-slate-400 mt-1">Attach a clear photo as evidence. Automated category and priority suggestions are not an official assessment.</p>
             </div>
 
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-6">
@@ -478,7 +556,7 @@ export default function ReportIssue() {
           <div className="space-y-6">
             <div>
               <h3 className="text-lg font-bold font-outfit text-navy-800 dark:text-white">Step 5: Review Report Details</h3>
-              <p className="text-xs text-slate-500 dark:text-slate-400 mt-1">Confirm your report summary before submitting to municipal servers.</p>
+              <p className="text-xs text-slate-500 dark:text-slate-400 mt-1">Review your details before sending this internal Smart Bharat report. It is not a government grievance submission.</p>
             </div>
 
             <div className="p-5 rounded-2xl bg-slate-50 dark:bg-navy-950 border border-slate-200 dark:border-navy-800 space-y-4">
@@ -508,8 +586,8 @@ export default function ReportIssue() {
               )}
             </div>
 
-            <Alert variant="info" title="Civic Points Reward">
-              Submitting this complaint will instantly award <strong>+20 Civic Points</strong> to your profile!
+            <Alert variant="info" title="Submission destination">
+              This creates an internal Smart Bharat tracking record only. Use the suggested external portal separately to file a government grievance.
             </Alert>
 
             <div className="flex justify-between pt-4 border-t border-slate-150 dark:border-navy-800">
@@ -517,7 +595,7 @@ export default function ReportIssue() {
                 Back
               </Button>
               <Button variant="saffron" size="lg" onClick={handleSubmit} isLoading={submitting}>
-                Submit & Register Complaint
+                Submit to Smart Bharat
               </Button>
             </div>
           </div>
@@ -530,8 +608,8 @@ export default function ReportIssue() {
         <Modal
           isOpen={!!submittedComplaint}
           onClose={() => setSubmittedComplaint(null)}
-          title="🎉 Complaint Registered Successfully!"
-          subtitle="Your issue has been logged into the municipal database."
+          title="Smart Bharat report received"
+          subtitle="This is an internal Smart Bharat record, not a government grievance submission."
           footer={
             <Button variant="saffron" onClick={() => setSubmittedComplaint(null)}>
               Done
@@ -544,25 +622,25 @@ export default function ReportIssue() {
             </div>
 
             <div className="p-4 rounded-xl bg-slate-50 dark:bg-navy-950 border border-slate-200 dark:border-navy-800 space-y-2">
-              <p className="text-xs font-bold text-slate-400 uppercase tracking-widest">Official Complaint ID</p>
+              <p className="text-xs font-bold text-slate-400 uppercase tracking-widest">Smart Bharat Reference</p>
               <p className="text-2xl font-extrabold font-mono text-saffron-500">{submittedComplaint.complaintId}</p>
             </div>
 
             <div className="grid grid-cols-2 gap-3 text-xs text-left">
               <div className="p-3 rounded-lg bg-slate-100 dark:bg-navy-950">
-                <span className="text-slate-400 text-[10px] font-bold block">AI PRIORITY</span>
+                <span className="text-slate-400 text-[10px] font-bold block">SUGGESTED PRIORITY</span>
                 <Badge variant={submittedComplaint.priority === 'High' ? 'danger' : 'warning'}>
                   {submittedComplaint.priority} Priority
                 </Badge>
               </div>
               <div className="p-3 rounded-lg bg-slate-100 dark:bg-navy-950">
-                <span className="text-slate-400 text-[10px] font-bold block">REWARD EARNED</span>
-                <span className="font-bold text-emerald-600 dark:text-emerald-400">+20 Civic Points</span>
+                <span className="text-slate-400 text-[10px] font-bold block">POINTS EARNED</span>
+                <span className="font-bold text-emerald-600 dark:text-emerald-400">+{submittedComplaint.rewardsEarned || 0}</span>
               </div>
             </div>
 
             <p className="text-xs text-slate-500">
-              Assigned Department: <strong className="text-navy-800 dark:text-white">{submittedComplaint.department}</strong>
+              Internal routing: <strong className="text-navy-800 dark:text-white">{submittedComplaint.department || 'Unassigned'}</strong>
             </p>
           </div>
         </Modal>

@@ -45,7 +45,6 @@ export default function Profile() {
     { title: 'Civic Starter', minPoints: 10, desc: 'Welcome bonus for joining Smart Bharat AI' },
     { title: 'Active Reporter', minPoints: 100, desc: 'Logged valid civic complaints to help the city' },
     { title: 'Civic Guardian', minPoints: 300, desc: 'Helped resolve municipal hazards in your ward' },
-    { title: 'Community Legend', minPoints: 600, desc: 'Top tier citizen contributor in regional scoreboards' }
   ];
 
   return (
@@ -83,7 +82,7 @@ export default function Profile() {
             </div>
 
             <div className="flex justify-center gap-2">
-              <Badge variant="saffron" size="md">State: {profile?.state || 'Delhi'}</Badge>
+              <Badge variant="saffron" size="md">Residence: {profile?.state || 'Not set'}</Badge>
               <Badge variant={profile?.role === 'admin' ? 'danger' : 'info'} size="md">
                 {profile?.role === 'admin' ? 'Admin' : 'Citizen'}
               </Badge>
@@ -107,7 +106,7 @@ export default function Profile() {
               </div>
 
               <p className="text-[10px] text-slate-400 font-medium">
-                Earn {nextLevelPoints - rewardPoints} more points by logging issues or completing document verifications to reach Level {currentLevel + 1}!
+                Earn {nextLevelPoints - rewardPoints} more points through supported Smart Bharat activities to reach Level {currentLevel + 1}.
               </p>
             </div>
           </Card>
@@ -185,7 +184,7 @@ export default function Profile() {
 
                 <div className="p-4 rounded-xl bg-slate-50 dark:bg-navy-950 border border-slate-200 dark:border-navy-800 text-center">
                   <span className="text-2xl font-extrabold font-outfit text-navy-800 dark:text-white">{documents.length}</span>
-                  <span className="text-xs font-bold text-slate-400 uppercase tracking-wider block mt-1">Locker Documents</span>
+                  <span className="text-xs font-bold text-slate-400 uppercase tracking-wider block mt-1">Smart Bharat Vault Documents</span>
                 </div>
               </div>
             </CardBody>

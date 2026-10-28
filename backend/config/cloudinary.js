@@ -1,6 +1,4 @@
 const cloudinary = require('cloudinary').v2;
-const fs = require('fs');
-const path = require('path');
 
 let isCloudinaryConfigured = false;
 
@@ -17,38 +15,103 @@ if (
   isCloudinaryConfigured = true;
   console.log("✅ Cloudinary Configured Successfully");
 } else {
-  console.warn("⚠️ Cloudinary credentials missing in env. Falling back to local backend filesystem uploads.");
+  console.warn("⚠️ Cloudinary credentials missing in env. Private file uploads are unavailable.");
 }
 
-// Ensure local uploads directory exists
-const localUploadsDir = path.join(__dirname, '..', 'uploads');
-if (!fs.existsSync(localUploadsDir)) {
-  fs.mkdirSync(localUploadsDir, { recursive: true });
-}
-
-// Exportable upload helper
-const uploadImage = async (fileBuffer, fileName) => {
-  if (isCloudinaryConfigured) {
-    return new Promise((resolve, reject) => {
-      cloudinary.uploader.upload_stream(
-        { resource_type: 'auto', folder: 'smart_bharat' },
-        (error, result) => {
-          if (error) reject(error);
-          else resolve(result.secure_url);
-        }
-      ).end(fileBuffer);
-    });
-  } else {
-    // Local fallback: write file to backend/uploads and return a local URL path
-    const safeName = `${Date.now()}-${fileName.replace(/[^a-z0-9.]/gi, '_')}`;
-    const filePath = path.join(localUploadsDir, safeName);
-    fs.writeFileSync(filePath, fileBuffer);
-    // Return relative URL that Express can serve statically
-    return `/uploads/${safeName}`;
+const uploadPrivateDocument = async (fileBuffer, fileName) => {
+  if (!isCloudinaryConfigured) {
+    throw new Error('Private document storage is not configured.');
   }
+
+  return new Promise((resolve, reject) => {
+    cloudinary.uploader.upload_stream(
+      {
+        resource_type: 'raw',
+        type: 'authenticated',
+        access_mode: 'authenticated',
+        folder: 'smart_bharat_private',
+        filename_override: fileName
+      },
+      (error, result) => {
+        if (error) reject(error);
+        else resolve({ publicId: result.public_id, format: result.format || '' });
+      }
+    ).end(fileBuffer);
+  });
+};
+
+const uploadPrivateEvidence = async (fileBuffer, fileName) => {
+  if (!isCloudinaryConfigured) {
+    throw new Error('Private evidence storage is not configured.');
+  }
+
+  return new Promise((resolve, reject) => {
+    cloudinary.uploader.upload_stream(
+      {
+        resource_type: 'image',
+        type: 'authenticated',
+        access_mode: 'authenticated',
+        folder: 'smart_bharat_private/evidence',
+        filename_override: fileName
+      },
+      (error, result) => {
+        if (error) reject(error);
+        else resolve({ publicId: result.public_id, format: result.format || '' });
+      }
+    ).end(fileBuffer);
+  });
+};
+
+const getPrivateDocumentUrl = (publicId, format) => {
+  if (!isCloudinaryConfigured) {
+    throw new Error('Private document storage is not configured.');
+  }
+
+  return cloudinary.utils.private_download_url(publicId, format, {
+    resource_type: 'raw',
+    type: 'authenticated',
+    expires_at: Math.floor(Date.now() / 1000) + 300,
+    attachment: true
+  });
+};
+
+const getPrivateEvidenceUrl = (publicId, format) => {
+  if (!isCloudinaryConfigured) {
+    throw new Error('Private evidence storage is not configured.');
+  }
+
+  return cloudinary.utils.private_download_url(publicId, format, {
+    resource_type: 'image',
+    type: 'authenticated',
+    expires_at: Math.floor(Date.now() / 1000) + 300,
+    attachment: true
+  });
+};
+
+const deletePrivateEvidence = async (publicId) => {
+  if (!isCloudinaryConfigured) return;
+  await cloudinary.uploader.destroy(publicId, {
+    resource_type: 'image',
+    type: 'authenticated',
+    invalidate: true
+  });
+};
+
+const deletePrivateDocument = async (publicId) => {
+  if (!isCloudinaryConfigured) return;
+  await cloudinary.uploader.destroy(publicId, {
+    resource_type: 'raw',
+    type: 'authenticated',
+    invalidate: true
+  });
 };
 
 module.exports = {
-  uploadImage,
+  uploadPrivateDocument,
+  uploadPrivateEvidence,
+  getPrivateDocumentUrl,
+  getPrivateEvidenceUrl,
+  deletePrivateDocument,
+  deletePrivateEvidence,
   isCloudinaryConfigured
 };

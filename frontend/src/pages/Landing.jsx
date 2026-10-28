@@ -120,7 +120,7 @@ export default function Landing() {
               </div>
               <h3 className="text-xl font-bold text-navy-800 dark:text-white">AI Issue Reporting</h3>
               <p className="mt-3 text-sm text-slate-600 dark:text-slate-300">
-                Snap a photo of garbage or road damage. Our AI auto-categorizes, tags your GPS coordinates, and assigns department priority levels instantly.
+                Add a photo of garbage or road damage. The system can suggest a category and priority; these are not an official assessment or department assignment.
               </p>
             </div>
             <Link to="/login" className="mt-6 text-sm font-semibold text-saffron-500 dark:text-saffron-400 flex items-center gap-1 hover:gap-2 transition-all">
@@ -157,7 +157,7 @@ export default function Landing() {
             </span>
             <h2 className="text-3xl md:text-4xl font-bold font-outfit">Citizen Rewards System</h2>
             <p className="text-slate-200 text-base leading-relaxed">
-              Earn reward points directly to your civic profile when issues you report are marked as resolved by city administrators. Redeem points for verified discounts and display badges representing your local service.
+              Earn Smart Bharat reward points for supported in-app actions and view your activity badges. Points have no cash value and cannot be redeemed for government benefits or discounts.
             </p>
             <div className="flex gap-4">
               <div className="flex items-center gap-2">

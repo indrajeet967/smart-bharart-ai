@@ -11,12 +11,21 @@ const Scheme = require('../models/Scheme');
 router.post('/recommend', async (req, res) => {
   const { age, gender, state, income, occupation, category, disability, student } = req.body;
 
-  // Set default values if fields are missing
+  const parsedAge = age === undefined || age === '' ? null : Number(age);
+  const parsedIncome = income === undefined || income === '' ? null : Number(income);
+  if (
+    (parsedAge !== null && (!Number.isInteger(parsedAge) || parsedAge < 0 || parsedAge > 120)) ||
+    (parsedIncome !== null && (!Number.isFinite(parsedIncome) || parsedIncome < 0)) ||
+    (state !== undefined && (typeof state !== 'string' || state.length > 100))
+  ) {
+    return res.status(400).json({ error: 'Eligibility search details are invalid.' });
+  }
+
   const userProfile = {
-    age: parseInt(age) || 25,
+    age: parsedAge,
     gender: gender || 'All',
     state: state || 'All',
-    income: parseFloat(income) || 200000,
+    income: parsedIncome,
     occupation: occupation || 'Any',
     category: category || 'General',
     disability: !!disability,
@@ -32,18 +41,18 @@ router.post('/recommend', async (req, res) => {
     }
 
     // Local eligibility matching filter
-    const eligibleSchemes = allSchemes.filter(scheme => {
+    const potentialMatches = allSchemes.filter(scheme => {
       const e = scheme.eligibility;
-      if (!e) return true;
+      if (scheme.eligibilityVerified !== true || !e) return false;
 
       // Age check
-      if (userProfile.age < e.ageMin || userProfile.age > e.ageMax) return false;
+      if (userProfile.age !== null && (userProfile.age < e.ageMin || userProfile.age > e.ageMax)) return false;
 
       // Gender check
       if (e.gender !== 'All' && userProfile.gender !== 'All' && e.gender.toLowerCase() !== userProfile.gender.toLowerCase()) return false;
 
       // Income check
-      if (userProfile.income > e.incomeMax) return false;
+      if (userProfile.income !== null && userProfile.income > e.incomeMax) return false;
 
       // State check
       if (scheme.state !== 'All' && userProfile.state !== 'All' && scheme.state.toLowerCase() !== userProfile.state.toLowerCase()) return false;
@@ -71,7 +80,7 @@ router.post('/recommend', async (req, res) => {
 
     // Request Gemini recommendations if API key exists
     const apiKey = process.env.GEMINI_API_KEY;
-    if (apiKey && eligibleSchemes.length > 0) {
+    if (apiKey && potentialMatches.length > 0) {
       try {
         const genAI = new GoogleGenerativeAI(apiKey);
         const model = genAI.getGenerativeModel({ model: 'gemini-1.5-flash' });
@@ -87,13 +96,13 @@ router.post('/recommend', async (req, res) => {
         - Disabled: ${userProfile.disability ? 'Yes' : 'No'}
         - Student: ${userProfile.student ? 'Yes' : 'No'}
         
-        Our local database found these eligible schemes:
-        ${eligibleSchemes.map(s => `- "${s.title}": ${s.description} (Benefits: ${s.benefits})`).join('\n')}
+        Our catalog found these possible matches. The catalog may not contain complete or current rules:
+        ${potentialMatches.map(s => `- "${s.title}": ${s.description} (Benefits listed in catalog: ${s.benefits})`).join('\n')}
         
         Please return a personalized greeting and summary in markdown explaining:
-        1. Why these schemes are highly recommended for them.
-        2. Important steps or timelines they need to watch out for.
-        3. Tips on documents they should gather.
+        1. Explain which listed catalog rules match the supplied details.
+        2. Explicitly say this is not an eligibility decision or approval.
+        3. Do not invent application steps, timelines, benefits, or documents.
         
         Keep it warm, structured, and easy to read.`;
 
@@ -101,7 +110,7 @@ router.post('/recommend', async (req, res) => {
         const recommendationText = result.response.text();
 
         return res.json({
-          eligibleSchemes,
+          potentialMatches,
           recommendation: recommendationText
         });
       } catch (geminiErr) {
@@ -111,30 +120,19 @@ router.post('/recommend', async (req, res) => {
     }
 
     // Default mock recommendation summary if Gemini is offline or fails
-    let mockSummary = `### Personalized Recommendations
+    let mockSummary = `### Potential catalog matches
 
-Based on your profile, you are eligible for **${eligibleSchemes.length} scheme(s)**:
+The catalog contains **${potentialMatches.length} potential match(es)** based on the details provided. This is not an eligibility decision or guarantee of approval.
 
-${eligibleSchemes.map(s => `* **${s.title}**: Matches your occupation as a *${userProfile.occupation}* or social category *${userProfile.category}*. Benefit: *${s.benefits}*.`).join('\n')}
-
-**Steps to Apply:**
-1. Click the **Apply Now** button on the scheme card to go to the official department website.
-2. Ensure you have your Aadhaar Card, Income Certificate, and bank details ready.
-3. If you have active certificates (such as Category or Student ID cards), upload them under your **Digital Locker** for fast access.
+Check the current eligibility criteria and application status on each scheme's official source before applying.
 `;
 
-    if (eligibleSchemes.length === 0) {
-      mockSummary = `### Recommendations Update
-      
-We did not find exact scheme matches in our directory for this combination. However, you may qualify for general central schemes like:
-* **Digital India Career Certificates**: For students.
-* **National Health Protection Scheme**: Basic emergency covers for low income families.
-
-*Tip: Try adjusting your state or occupational inputs in Settings.*`;
+    if (potentialMatches.length === 0) {
+      mockSummary = 'No potential matches were found in this catalog for the supplied details. The catalog is incomplete; this does not establish that you are ineligible for government schemes.';
     }
 
     res.json({
-      eligibleSchemes,
+      potentialMatches,
       recommendation: mockSummary
     });
 

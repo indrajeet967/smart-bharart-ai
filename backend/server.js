@@ -7,13 +7,18 @@ const { connectDB } = require('./config/db');
 const app = express();
 
 // Middlewares
-app.use(cors());
+const allowedOrigins = (process.env.CORS_ORIGINS || 'http://localhost:3000')
+  .split(',')
+  .map((origin) => origin.trim())
+  .filter(Boolean);
+app.use(cors({
+  origin(origin, callback) {
+    callback(null, !origin || allowedOrigins.includes(origin));
+  }
+}));
 // Increase payload limit for base64 local image upload fallbacks
 app.use(express.json({ limit: '10mb' }));
 app.use(express.urlencoded({ limit: '10mb', extended: true }));
-
-// Serve local upload folder statically
-app.use('/uploads', express.static(path.join(__dirname, 'uploads')));
 
 // Connect to Database
 connectDB();
@@ -33,7 +38,7 @@ app.get('/api/health', (req, res) => {
     status: 'online',
     timestamp: new Date(),
     database: isMock ? 'JSON Mock Mode' : 'MongoDB Connected',
-    gemini: process.env.GEMINI_API_KEY ? 'Configured' : 'Offline Mock Mode'
+    gemini: process.env.GEMINI_API_KEY ? 'Configured' : 'Unavailable; use local catalog'
   });
 });
 

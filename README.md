@@ -1,7 +1,7 @@
 # 🇮🇳 Smart Bharat AI — Intelligent Digital Citizen-Assistance Platform
 
-> **Production-Style Full-Stack Citizen Service Platform**  
-> *Built with React 18, Vite, Tailwind CSS, Node.js, Express.js, MongoDB (with local JSON fallback), bCrypt + JWT Authentication, Google Gemini 1.5 Flash AI, Google Maps Platform / Leaflet, and PWA capabilities.*
+> **Citizen-service companion prototype**
+> *React 18, Vite, Express, MongoDB (with a local JSON development fallback), JWT authentication, optional Gemini assistance, and OpenStreetMap-based nearby search.*
 
 ---
 
@@ -20,16 +20,16 @@
 
 ## 🌟 Product Vision & Core Features
 
-**Smart Bharat AI** is an intelligent digital citizen assistance platform designed to connect citizens with essential government services, scheme eligibility matcher, civic complaint tracking, DigiLocker document management, nearby emergency facility locator, and an AI companion capable of natural language interaction and tool execution.
+**Smart Bharat AI** helps citizens discover government-service information, prepare civic complaints, and search nearby facilities. It does not submit grievances to government portals and is not an official DigiLocker integration. Catalog content may be incomplete or outdated; users must confirm current requirements with the linked authority.
 
 ### Key Capabilities
-- 💬 **AI Assistant with Controlled Tool Calling**: Gemini 1.5 Flash AI connected to application tools (`REPORT_ISSUE`, `TRACK_COMPLAINT`, `GOVERNMENT_SCHEMES`, `DIGI_LOCKER`, `NEARBY_OFFICES`, `EMERGENCY_SERVICES`, `PROFILE`, `SETTINGS`) with contextual action buttons, STT voice dictation, and TTS voice synthesis.
-- 🛣️ **Step-by-Step Issue Reporting Wizard**: 5-step wizard (Category -> Location Geolocation -> Photo Evidence -> Description -> Review) generating Complaint IDs (`SB-2026-XXXXX`), auto-assigning priority, and awarding **+20 Civic Points**.
-- 📊 **Complaint Tracker**: Real-time status workflow timeline (`Submitted` -> `Registered` -> `Assigned` -> `In Progress` -> `Resolved` -> `Closed`) with user privacy isolation.
-- 🔒 **DigiLocker Document Vault**: Encrypted document store with category filtering (`Identity`, `Education`, `Certificates`, `Government`, `Other`), PDF OCR parsing, AI legal circular simplifier, and JWT authorization ownership guards.
-- 📍 **Nearby Civic Offices & Google Maps / Leaflet**: Locates Hospitals, Police Stations, Fire Departments, Post Offices, Municipality Offices, Schools, and Banks with verified telephone dialers (`tel:`) and driving direction routes.
-- 📜 **Government Schemes Eligibility Matcher**: Demographic scheme matching engine linked to official government portals (`myScheme`, `India.gov.in`) with detail modals and eligibility disclaimers.
-- 🏆 **Civic Points & Rewards System**: Level progression bar (`Level = Math.floor(pts / 100) + 1`), badges cabinet (`Civic Starter`, `Active Reporter`, `Civic Guardian`, `Community Legend`), and automatic point credits upon issue resolution.
+- 💬 **AI Assistant**: Optional Gemini responses with local catalog lookup and official-source links. Answers and catalog details require confirmation on the source portal.
+- 🛣️ **Issue preparation and internal tracking**: The wizard can save a complaint to the Smart Bharat backend. That record is not a government grievance. Evidence upload requires configured private Cloudinary storage.
+- 📊 **Complaint Tracker**: Authenticated internal records are distinguished from external reference numbers supplied by the user; external government status is not retrieved automatically.
+- 🔒 **Private Smart Bharat document vault**: Authenticated uploads require Cloudinary credentials. This is separate from the official [DigiLocker](https://www.digilocker.gov.in/) service; documents are not authenticity-verified.
+- 📍 **Nearby facilities**: Search uses OpenStreetMap Overpass and Photon services with the selected location. Facility completeness and data freshness depend on those sources; opening status is not inferred.
+- 📜 **Scheme discovery**: A searchable catalog and rule-based potential-match comparison. Catalog completeness and eligibility are not guaranteed.
+- 🏆 **Civic points**: Backend-defined points are attached to internal complaint actions; they are application rewards, not government benefits.
 - 🛡️ **Admin Dashboard**: Comprehensive auditing control panel for managing complaints, assigning departments, updating status workflows, publishing targeted broadcast notices, and inspecting SLA analytics.
 
 ---
@@ -41,7 +41,7 @@ d:/antigravity/
 ├── backend/
 │   ├── config/
 │   │   ├── db.js              # MongoDB Mongoose & Local JSON fallback adapter
-│   │   └── cloudinary.js      # Cloudinary image upload stream adapter
+│   │   └── cloudinary.js      # Private Cloudinary file storage helpers
 │   ├── middleware/
 │   │   └── authMiddleware.js  # JWT token verification & admin guards
 │   ├── models/
@@ -53,7 +53,7 @@ d:/antigravity/
 │   │   ├── ai.js              # AI Chat endpoint with Gemini & Tool Calling
 │   │   ├── auth.js            # JWT Register, Login, Me, Update routes
 │   │   ├── complaints.js      # Report, Track, User & Admin update endpoints
-│   │   ├── documents.js       # DigiLocker Upload, View, Delete & Legal Simplifier
+│   │   ├── documents.js       # Private Smart Bharat vault and legal simplifier
 │   │   ├── notifications.js   # Personalized Feed & Mark-as-Read endpoints
 │   │   └── schemes.js         # Eligibility recommendation engine
 │   ├── db_fallback.json       # Local JSON database for offline/no-MongoDB dev
@@ -95,11 +95,11 @@ d:/antigravity/
 │   │   │   ├── AiAssistant.jsx       # AI Assistant with tool navigation buttons
 │   │   │   ├── ComplaintTracker.jsx  # Status timeline tracker
 │   │   │   ├── Dashboard.jsx         # Citizen overview dashboard
-│   │   │   ├── DocumentAssistant.jsx # DigiLocker & Legal text simplifier
+│   │   │   ├── DocumentAssistant.jsx # Smart Bharat vault and shared document catalog
 │   │   │   ├── Emergency.jsx         # Direct dial emergency contacts
 │   │   │   ├── Landing.jsx           # Public landing showcase page
-│   │   │   ├── Login.jsx             # Sign-in & Sign-up page with admin bypass
-│   │   │   ├── NearbyOffices.jsx     # Google Maps / Leaflet office locator
+│   │   │   ├── Login.jsx             # Sign-in and development-gated sign-up
+│   │   │   ├── NearbyOffices.jsx     # OpenStreetMap facility search
 │   │   │   ├── Profile.jsx           # Civic points cabinet & badges
 │   │   │   ├── ReportIssue.jsx       # 5-Step issue reporting wizard
 │   │   │   ├── Schemes.jsx           # Government schemes & eligibility matcher
@@ -126,9 +126,9 @@ d:/antigravity/
 | **Backend Framework** | Node.js, Express.js, Multer |
 | **Database & Fallback** | MongoDB (Mongoose) + Local JSON Storage Adapter (`db_fallback.json`) |
 | **Authentication** | bCrypt Password Hashing + JSON Web Tokens (JWT) |
-| **AI Integration** | Google Gemini API (`@google/generative-ai`) + Fallback Keyword/Intent Engine |
-| **Maps & Location** | Google Maps Platform JS API / Places API + Leaflet Fallback + Geolocation API |
-| **Document Processing** | PDF-Parse + Gemini OCR |
+| **AI Integration** | Optional Google Gemini API (`@google/generative-ai`) with local catalog context |
+| **Maps & Location** | OpenStreetMap Overpass + Photon geocoding + browser Geolocation API |
+| **Document Processing** | Private file storage (Cloudinary when configured) + optional Gemini legal-text simplification |
 
 ---
 
@@ -139,7 +139,9 @@ Create a `.env` file in the `backend/` directory:
 ```env
 PORT=5000
 MONGODB_URI=mongodb://localhost:27017/smart_bharat
-JWT_SECRET=smart_bharat_secret_key_2026_change_in_production
+JWT_SECRET=replace_with_a_long_random_secret
+ENABLE_DEMO_OTP=false
+CORS_ORIGINS=http://localhost:3000
 GEMINI_API_KEY=your_google_gemini_api_key_here
 CLOUDINARY_CLOUD_NAME=your_cloudinary_cloud_name
 CLOUDINARY_API_KEY=your_cloudinary_api_key
@@ -149,7 +151,7 @@ CLOUDINARY_API_SECRET=your_cloudinary_api_secret
 Create a `.env` file in the `frontend/` directory:
 
 ```env
-VITE_GOOGLE_MAPS_API_KEY=your_google_maps_api_key_here
+VITE_API_BASE_URL=
 ```
 
 ---
@@ -157,26 +159,27 @@ VITE_GOOGLE_MAPS_API_KEY=your_google_maps_api_key_here
 ## 🔌 API REST Contracts
 
 ### Authentication (`/api/auth`)
-- `POST /api/auth/register` — Registers user with password hashing and returns JWT token.
+- `POST /api/auth/register` — Creates an unverified account only in development when demo OTP is explicitly enabled; no token is issued until verification.
 - `POST /api/auth/login` — Authenticates email and password, returning JWT token.
+- `POST /api/auth/verify-otp` — Verifies the development code and issues a JWT session.
 - `GET /api/auth/me` — Returns logged-in user profile (`Authorization: Bearer <token>`).
 - `POST /api/auth/update` — Updates state, interests, and profile details.
 
 ### Complaints (`/api/complaints`)
-- `POST /api/complaints/report` — Lodges complaint, auto-generates Complaint ID (`SB-2026-XXXXX`), awards +20 points.
+- `POST /api/complaints/report` — Creates an internal Smart Bharat record and reference; it does not file a government grievance.
 - `GET /api/complaints/track/:id` — Fetches single complaint details & timeline.
 - `GET /api/complaints/user/:email` — Fetches user's own complaints (isolated ownership).
 - `GET /api/complaints/admin/all` — Admin fetch all complaints (`adminOnly`).
 - `POST /api/complaints/admin/update/:id` — Admin updates status, department, and awards points on `Resolved`.
 
 ### DigiLocker (`/api/documents`)
-- `POST /api/documents/upload` — Uploads document, runs Gemini OCR verification, and stores record.
+- `POST /api/documents/upload` — Stores a private Smart Bharat vault document when Cloudinary is configured; no OCR or authenticity verification is performed.
 - `GET /api/documents/user/:email` — Fetches user's locker files (`ownership checked`).
 - `DELETE /api/documents/:id` — Deletes document from locker (`ownership checked`).
 - `POST /api/documents/simplify` — Simplifies legal circulars into plain language.
 
 ### Government Schemes (`/api/schemes`)
-- `POST /api/schemes/recommend` — Matches user demographics against structured scheme database.
+- `POST /api/schemes/recommend` — Returns potential matches only for entries explicitly marked with verified eligibility rules; no current entries are certified by this project.
 
 ### Notifications (`/api/notifications`)
 - `GET /api/notifications/:email` — Retrieves personalized notification feed based on user state/interests.
@@ -184,37 +187,13 @@ VITE_GOOGLE_MAPS_API_KEY=your_google_maps_api_key_here
 - `POST /api/notifications/read-all` — Marks all user notifications as read.
 
 ### AI Companion (`/api/ai`)
-- `POST /api/ai/chat` — Processes user prompt, executes context tools, and returns response with controlled action buttons.
-- `GET /api/ai/history/:email` — Retrieves user conversation history.
+- `POST /api/ai/chat` — Authenticated Gemini chat using caller-provided catalog context; returns an explicit error when the AI service is unavailable.
 
 ---
 
-## 🤖 AI Tool Calling & Navigation Actions
+## 🤖 AI Assistant
 
-The AI Assistant evaluates conversation intent and returns structured action objects:
-
-```json
-{
-  "response": "I understand you want to report a pothole. You can lodge a formal report with photo evidence.",
-  "actions": [
-    {
-      "action": "REPORT_ISSUE",
-      "label": "Report Issue Now",
-      "path": "/dashboard/report"
-    }
-  ]
-}
-```
-
-### Controlled Action Mappings
-- `REPORT_ISSUE` → `/dashboard/report`
-- `TRACK_COMPLAINT` → `/dashboard/track`
-- `NEARBY_OFFICES` → `/dashboard/offices`
-- `DIGI_LOCKER` → `/dashboard/locker`
-- `GOVERNMENT_SCHEMES` → `/dashboard/schemes`
-- `EMERGENCY_SERVICES` → `/dashboard/emergency`
-- `PROFILE` → `/dashboard/profile`
-- `SETTINGS` → `/dashboard/settings`
+The assistant uses the local catalog for matching document and scheme questions and may call Gemini when `GEMINI_API_KEY` is configured. It does not submit forms or perform government transactions. Links and catalog information must be confirmed with the responsible official authority.
 
 ---
 
@@ -243,17 +222,23 @@ The application will be accessible at:
 - **Frontend App**: `http://localhost:3000`
 - **Backend API**: `http://localhost:5000`
 
-### 4. Admin Credentials Sandbox Bypass
-For testing administrative functions, sign in with:
-- **Admin Email**: `admin@smartbharat.gov.in`
-- **Password**: `admin123` (or any valid password)
-
-### 5. Production Build
+### 4. Production Build
 To verify and compile the static bundle:
 ```bash
 cd frontend
 npm run build
 ```
+
+## Configuration and deployment limitations
+
+- Copy `backend/.env.example` to `backend/.env`. Set a unique random `JWT_SECRET`, `MONGODB_URI`, and the allowed frontend origins in `CORS_ORIGINS`.
+- Gemini responses require `GEMINI_API_KEY`. Private document and complaint-evidence uploads require Cloudinary credentials. Without them, uploads fail explicitly; files are not written to a public local directory.
+- Email verification is not integrated. Signup is available only for non-production development when `ENABLE_DEMO_OTP=true`; the generated demo code is returned to the local client. Do not enable this setting in production.
+- The frontend can be deployed to GitHub Pages, but the backend must be hosted separately. Set `VITE_API_BASE_URL` to the backend origin when building the frontend and allow the GitHub Pages origin in backend `CORS_ORIGINS`. Never put backend secrets in `VITE_` variables.
+- Nearby search uses public Photon and Overpass services. It needs no Google Maps key, but depends on those services' availability, data coverage, rate limits, and terms.
+- The JSON fallback database is for local development only and is not durable or suitable for production. Use a configured MongoDB deployment for persistent user records.
+- The scheme/document catalog has no live verification feed or trustworthy per-entry verification date. Confirm current eligibility, fees, dates, and submission requirements with the linked official authority. Emergency guidance displays 112; additional service-specific numbers are withheld until their current official coverage is verified.
+- No admin sandbox credentials or password bypass are provided. Admin access must be assigned through a trusted, operator-controlled provisioning process.
 
 ---
 

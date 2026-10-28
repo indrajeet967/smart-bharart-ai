@@ -2,9 +2,9 @@ import React, { useState, useEffect } from 'react';
 import { useAuth } from '../context/AuthContext';
 import { useLanguage } from '../context/LanguageContext';
 import { useTheme } from '../context/ThemeContext';
-import { Bell, Sun, Moon, LogOut, Menu, User, Settings, CheckCircle2 } from 'lucide-react';
-import { Link } from 'react-router-dom';
+import { Bell, Sun, Moon, LogOut, Menu, User } from 'lucide-react';
 import axios from 'axios';
+import LocationSelector from './ui/LocationSelector';
 
 export default function Navbar({ onMenuToggle }) {
   const { profile, logout } = useAuth();
@@ -47,8 +47,13 @@ export default function Navbar({ onMenuToggle }) {
         </div>
       </div>
 
+      {/* Location Selector (center) */}
+      <div className="hidden sm:flex items-center">
+        <LocationSelector compact showLabel={false} />
+      </div>
+
       {/* Action Controls */}
-      <div className="flex items-center gap-4 relative">
+      <div className="flex items-center gap-3 relative">
         
         {/* Language Switcher */}
         <div className="relative">
@@ -128,7 +133,7 @@ export default function Navbar({ onMenuToggle }) {
         </div>
 
         {/* User Profile Info & Logout */}
-        <div className="flex items-center gap-3 border-l border-slate-250 dark:border-navy-800 pl-4">
+        <div className="flex items-center gap-3 border-l border-slate-250 dark:border-navy-800 pl-3">
           <div className="hidden sm:block text-right">
             <p className="text-xs font-bold text-slate-800 dark:text-slate-200">{profile?.displayName || 'Citizen'}</p>
             <p className="text-[10px] text-slate-400 font-semibold uppercase tracking-wider">{profile?.role === 'admin' ? 'Admin' : 'Citizen'}</p>

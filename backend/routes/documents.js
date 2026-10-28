@@ -1,17 +1,28 @@
 const express = require('express');
 const router = express.Router();
 const multer = require('multer');
-const pdfParse = require('pdf-parse');
 const { GoogleGenerativeAI } = require('@google/generative-ai');
 const db = require('../config/db');
 Object.defineProperty(global, 'isMock', { get: () => db.isMock, configurable: true });
 Object.defineProperty(global, 'mockDb', { get: () => db.mockDb, configurable: true });
-const { uploadImage } = require('../config/cloudinary');
-const { verifyToken, optionalAuth } = require('../middleware/authMiddleware');
+const {
+  uploadPrivateDocument,
+  getPrivateDocumentUrl,
+  deletePrivateDocument,
+  isCloudinaryConfigured
+} = require('../config/cloudinary');
+const { verifyToken } = require('../middleware/authMiddleware');
 
 const upload = multer({
   storage: multer.memoryStorage(),
-  limits: { fileSize: 5 * 1024 * 1024 } // 5MB limit
+  limits: { fileSize: 5 * 1024 * 1024 },
+  fileFilter: (req, file, callback) => {
+    const allowedTypes = ['application/pdf', 'image/jpeg', 'image/png', 'image/webp'];
+    if (!allowedTypes.includes(file.mimetype)) {
+      return callback(new Error('Only PDF, JPEG, PNG, and WebP files are allowed.'));
+    }
+    callback(null, true);
+  }
 });
 
 // Map docTypes to categories
@@ -33,115 +44,36 @@ const getCategoryForDocType = (docType) => {
 };
 
 // POST /api/documents/upload
-// Upload document to Digi Locker with user authorization & OCR verification
-router.post('/upload', optionalAuth, upload.single('documentFile'), async (req, res) => {
-  const email = (req.user && req.user.email) || req.body.email;
+// Store a private document in the Smart Bharat vault.
+router.post('/upload', verifyToken, upload.single('documentFile'), async (req, res) => {
+  const email = req.user.email;
   const docType = req.body.docType || 'Identity Document';
   const category = req.body.category || getCategoryForDocType(docType);
-
-  if (!email) {
-    return res.status(401).json({ error: 'Authentication required to upload to DigiLocker.' });
-  }
 
   if (!req.file) {
     return res.status(400).json({ error: 'No document file attached.' });
   }
 
-  const allowedTypes = ['application/pdf', 'image/jpeg', 'image/jpg', 'image/png', 'image/webp'];
-  if (!allowedTypes.includes(req.file.mimetype)) {
-    return res.status(400).json({ error: 'Invalid file format. Only PDF, JPG, and PNG are allowed.' });
+  if (!isCloudinaryConfigured) {
+    return res.status(503).json({ error: 'Private document storage is not configured. No file was uploaded.' });
   }
 
   try {
     const fileName = req.file.originalname;
-    const isPdf = req.file.mimetype === 'application/pdf';
-
-    // Upload to file store
-    const fileUrl = await uploadImage(req.file.buffer, fileName);
-
-    let ocrText = '';
-    let extractedDetails = {};
-    let verificationStatus = 'Verified';
-
-    const apiKey = process.env.GEMINI_API_KEY;
-    if (apiKey) {
-      try {
-        const genAI = new GoogleGenerativeAI(apiKey);
-        const model = genAI.getGenerativeModel({ model: 'gemini-1.5-flash' });
-
-        if (isPdf) {
-          const parsedPdf = await pdfParse(req.file.buffer);
-          ocrText = parsedPdf.text;
-
-          const prompt = `Perform OCR verification on text extracted from a government document.
-          Doc Type: ${docType}
-          Text: "${ocrText.substring(0, 3000)}"
-          
-          Return raw JSON:
-          {
-            "docNumber": "XXXX-XXXX-XXXX",
-            "name": "John Doe",
-            "dob": "DD/MM/YYYY",
-            "expiry": "Permanent",
-            "isAuthentic": "Yes"
-          }`;
-
-          const result = await model.generateContent([prompt]);
-          extractedDetails = JSON.parse(result.response.text().replace(/```json/g, '').replace(/```/g, '').trim());
-          verificationStatus = extractedDetails.isAuthentic === 'Yes' ? 'Verified' : 'Flagged';
-        } else {
-          const imagePart = {
-            inlineData: { data: req.file.buffer.toString('base64'), mimeType: req.file.mimetype }
-          };
-
-          const prompt = `Perform OCR verification on this image of a government document.
-          Doc Type: ${docType}
-          
-          Return raw JSON:
-          {
-            "docNumber": "XXXX-XXXX-XXXX",
-            "name": "John Doe",
-            "dob": "DD/MM/YYYY",
-            "expiry": "Permanent",
-            "isAuthentic": "Yes"
-          }`;
-
-          const result = await model.generateContent([prompt, imagePart]);
-          extractedDetails = JSON.parse(result.response.text().replace(/```json/g, '').replace(/```/g, '').trim());
-          verificationStatus = extractedDetails.isAuthentic === 'Yes' ? 'Verified' : 'Flagged';
-        }
-      } catch (geminiErr) {
-        console.warn("OCR parser fallback:", geminiErr.message);
-        extractedDetails = {
-          docNumber: `SB-DOC-${Math.floor(100000 + Math.random() * 900000)}`,
-          name: "Sample Verified Record",
-          dob: "N/A",
-          expiry: "Permanent",
-          isAuthentic: "Yes"
-        };
-        verificationStatus = 'Verified';
-      }
-    } else {
-      extractedDetails = {
-        docNumber: `SB-DEMO-${Math.floor(100000 + Math.random() * 900000)}`,
-        name: "Demo Citizen Record",
-        dob: "01/01/1995",
-        expiry: "Permanent",
-        isAuthentic: "Yes"
-      };
-      verificationStatus = 'Verified (Demo)';
-    }
+    const { publicId, format } = await uploadPrivateDocument(req.file.buffer, fileName);
 
     const documentRecord = {
       email,
       docType,
       category,
       fileName,
-      fileUrl,
+      fileUrl: '',
+      privatePublicId: publicId,
+      fileFormat: format,
       fileType: req.file.mimetype,
       fileSize: (req.file.size / 1024).toFixed(1) + ' KB',
-      verificationStatus,
-      details: extractedDetails,
+      verificationStatus: 'Not verified',
+      details: {},
       uploadedAt: new Date().toISOString()
     };
 
@@ -154,24 +86,27 @@ router.post('/upload', optionalAuth, upload.single('documentFile'), async (req, 
       savedDoc = { ...documentRecord, _id: resDb.insertedId };
     }
 
+    const responseDocument = {
+      ...(savedDoc.toObject ? savedDoc.toObject() : savedDoc),
+      fileUrl: getPrivateDocumentUrl(publicId, format)
+    };
+
     res.status(201).json({
       success: true,
-      message: 'Document saved securely in DigiLocker',
-      document: savedDoc
+      message: 'Stored in the private Smart Bharat vault. This is not an official DigiLocker integration and the document authenticity has not been verified.',
+      document: responseDocument
     });
   } catch (err) {
     console.error("Locker upload error:", err);
-    res.status(500).json({ error: 'Failed to save document to DigiLocker.' });
+    res.status(500).json({ error: 'Failed to save document to the Smart Bharat vault.' });
   }
 });
 
 // GET /api/documents/user/:email
 // Retrieve authenticated user's documents
-router.get('/user/:email', optionalAuth, async (req, res) => {
+router.get('/user/:email', verifyToken, async (req, res) => {
   const targetEmail = req.params.email;
-  const userEmail = (req.user && req.user.email) || targetEmail;
 
-  // Ownership Check: Users can ONLY access their own documents unless Admin
   if (req.user && req.user.role !== 'admin' && req.user.email !== targetEmail) {
     return res.status(403).json({ error: 'Forbidden. You can only access your own DigiLocker documents.' });
   }
@@ -179,12 +114,19 @@ router.get('/user/:email', optionalAuth, async (req, res) => {
   try {
     let userDocs = [];
     if (db.isMock) {
-      userDocs = db.mockDb.find('documents', { email: userEmail });
+      userDocs = db.mockDb.find('documents', { email: req.user.role === 'admin' ? targetEmail : req.user.email });
     } else {
       const mongoose = require('mongoose');
-      userDocs = await mongoose.connection.db.collection('documents').find({ email: userEmail }).toArray();
+      userDocs = await mongoose.connection.db.collection('documents')
+        .find({ email: req.user.role === 'admin' ? targetEmail : req.user.email })
+        .toArray();
     }
-    res.json(userDocs);
+    res.json(userDocs.map((doc) => ({
+      ...doc,
+      fileUrl: doc.privatePublicId
+        ? getPrivateDocumentUrl(doc.privatePublicId, doc.fileFormat || '')
+        : ''
+    })));
   } catch (err) {
     console.error("Fetch user docs error:", err);
     res.status(500).json({ error: 'Failed to retrieve locker documents.' });
@@ -193,9 +135,9 @@ router.get('/user/:email', optionalAuth, async (req, res) => {
 
 // DELETE /api/documents/:id
 // Delete document with ownership authorization check
-router.delete('/:id', optionalAuth, async (req, res) => {
+router.delete('/:id', verifyToken, async (req, res) => {
   const docId = req.params.id;
-  const userEmail = req.user ? req.user.email : null;
+  const userEmail = req.user.email;
 
   try {
     let doc = null;
@@ -216,8 +158,12 @@ router.delete('/:id', optionalAuth, async (req, res) => {
     }
 
     // Ownership check
-    if (userEmail && req.user.role !== 'admin' && doc.email !== userEmail) {
+    if (req.user.role !== 'admin' && doc.email !== userEmail) {
       return res.status(403).json({ error: 'Forbidden. You can only delete your own documents.' });
+    }
+
+    if (doc.privatePublicId) {
+      await deletePrivateDocument(doc.privatePublicId);
     }
 
     if (db.isMock) {
@@ -232,7 +178,7 @@ router.delete('/:id', optionalAuth, async (req, res) => {
       }
     }
 
-    res.json({ success: true, message: 'Document deleted from DigiLocker.' });
+    res.json({ success: true, message: 'Document deleted from your Smart Bharat vault.' });
   } catch (err) {
     console.error("Delete document error:", err);
     res.status(500).json({ error: 'Failed to delete document.' });
@@ -241,30 +187,24 @@ router.delete('/:id', optionalAuth, async (req, res) => {
 
 // POST /api/documents/simplify
 // Simplify legal language
-router.post('/simplify', async (req, res) => {
+router.post('/simplify', verifyToken, async (req, res) => {
   const { legalText } = req.body;
 
-  if (!legalText) {
-    return res.status(400).json({ error: 'Legal text is required.' });
+  if (typeof legalText !== 'string' || !legalText.trim() || legalText.length > 30000) {
+    return res.status(400).json({ error: 'Legal text between 1 and 30000 characters is required.' });
   }
 
   const apiKey = process.env.GEMINI_API_KEY;
   if (!apiKey) {
-    return res.json({
-      simplifiedText: `### ⚖️ Plain-Language Summary
-1. **Core Duty**: Comply with municipal guidelines regarding public sanitation and safety.
-2. **Key Action**: Deposit waste only in designated municipal bins.
-3. **Penalties**: Non-compliance may result in administrative fines by local authorities.
-4. **Resolution**: Direct grievances to the sub-divisional magistrate.`
-    });
+    return res.status(503).json({ error: 'The legal simplification service is not configured.' });
   }
 
   try {
     const genAI = new GoogleGenerativeAI(apiKey);
     const model = genAI.getGenerativeModel({ model: 'gemini-1.5-flash' });
 
-    const prompt = `You are an expert legal translator on the Smart Bharat portal.
-    Explain this legal text or circular in plain, simple, bulleted layman terms:
+    const prompt = `Explain the supplied legal text in plain language. This is informational, not legal advice.
+    Use only the text provided. Do not invent obligations, penalties, fees, dates, or next steps; explicitly say when the text does not state them.
 
     "${legalText}"
 

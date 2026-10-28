@@ -1,8 +1,12 @@
 const jwt = require('jsonwebtoken');
 
-const JWT_SECRET = process.env.JWT_SECRET || 'smart_bharat_secret_key_2026';
+const JWT_SECRET = process.env.JWT_SECRET;
 
 const verifyToken = (req, res, next) => {
+  if (!JWT_SECRET) {
+    return res.status(503).json({ error: 'Authentication is not configured on this server.' });
+  }
+
   const authHeader = req.headers.authorization || req.headers['x-auth-token'];
 
   if (!authHeader) {
