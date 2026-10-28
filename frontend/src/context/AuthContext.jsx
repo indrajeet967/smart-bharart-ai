@@ -2,6 +2,17 @@ import React, { createContext, useState, useEffect, useContext } from 'react';
 import axios from 'axios';
 
 const AuthContext = createContext();
+const API_BASE_URL = (import.meta.env.VITE_API_BASE_URL || '').replace(/\/+$/, '');
+
+const getApiErrorMessage = (error, fallback) => {
+  if (!API_BASE_URL && !import.meta.env.DEV) {
+    return 'Login service is not connected yet. The backend must be deployed and VITE_API_BASE_URL configured for the website.';
+  }
+  if (!error.response) {
+    return 'Could not reach the login service. Check the backend URL and try again.';
+  }
+  return error.response.data?.error || fallback;
+};
 
 export const useAuth = () => useContext(AuthContext);
 
@@ -70,7 +81,7 @@ export const AuthProvider = ({ children }) => {
       saveAuthSession(newToken, user);
       return user;
     } catch (err) {
-      throw new Error(err.response?.data?.error || 'Unable to sign in. Check your connection and try again.');
+      throw new Error(getApiErrorMessage(err, 'Unable to sign in. Check your email and password.'));
     } finally {
       setLoading(false);
     }
@@ -88,7 +99,7 @@ export const AuthProvider = ({ children }) => {
       }, { timeout: 3000 });
       return response.data.user;
     } catch (err) {
-      throw new Error(err.response?.data?.error || 'Unable to create account. Check your connection and try again.');
+      throw new Error(getApiErrorMessage(err, 'Unable to create account. Please try again.'));
     } finally {
       setLoading(false);
     }
@@ -99,7 +110,7 @@ export const AuthProvider = ({ children }) => {
       const res = await axios.post('/api/auth/send-otp', { email }, { timeout: 3000 });
       return res.data;
     } catch (err) {
-      throw new Error(err.response?.data?.error || 'Could not send the verification code.');
+      throw new Error(getApiErrorMessage(err, 'Could not send the verification code.'));
     }
   };
 
@@ -112,7 +123,7 @@ export const AuthProvider = ({ children }) => {
       saveAuthSession(res.data.token, res.data.user);
       return res.data;
     } catch (err) {
-      throw new Error(err.response?.data?.error || "OTP verification failed.");
+      throw new Error(getApiErrorMessage(err, 'OTP verification failed.'));
     }
   };
 
@@ -121,7 +132,7 @@ export const AuthProvider = ({ children }) => {
       const res = await axios.post('/api/auth/resend-otp', { email }, { timeout: 3000 });
       return res.data;
     } catch (err) {
-      throw new Error(err.response?.data?.error || 'Could not resend the verification code.');
+      throw new Error(getApiErrorMessage(err, 'Could not resend the verification code.'));
     }
   };
 

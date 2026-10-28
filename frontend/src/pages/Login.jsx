@@ -7,6 +7,7 @@ import Modal from '../components/ui/Modal';
 import Button from '../components/ui/Button';
 
 export default function Login() {
+  const apiConfigured = Boolean(import.meta.env.VITE_API_BASE_URL || import.meta.env.DEV);
   const navigate = useNavigate();
   const [searchParams] = useSearchParams();
   const { login, signup, sendOtp, verifyOtp, resendOtp, loginWithGoogle, currentUser } = useAuth();
@@ -131,7 +132,7 @@ export default function Login() {
       setResendTimer(60);
       setOtpSuccessMsg('A new development verification code was generated. No email was sent.');
     } catch (err) {
-      setOtpError("Failed to resend OTP.");
+      setOtpError(err.message || "Failed to resend OTP.");
     }
   };
 
@@ -375,7 +376,10 @@ export default function Login() {
 
         <div className="text-center p-3.5 glass bg-saffron-50 dark:bg-saffron-500/5 rounded-xl border border-saffron-200/50 dark:border-saffron-500/10">
           <p className="text-xs text-saffron-700 dark:text-saffron-400 font-semibold leading-relaxed">
-            Accounts require the configured backend. Administrator access is provisioned separately and cannot be granted by choosing an email address.
+            {apiConfigured
+              ? 'Sign in requires a registered account. New accounts need email verification.'
+              : 'Live sign-in is unavailable until the backend is deployed and connected. Setup instructions are in the project README.'}
+            {' '}Administrator access is provisioned separately.
           </p>
         </div>
       </div>
@@ -386,7 +390,7 @@ export default function Login() {
           isOpen={showOtpModal}
           onClose={() => setShowOtpModal(false)}
           title="Account Verification"
-          subtitle={`Enter the 6-digit development verification code for ${email}`}
+          subtitle={`Enter the 6-digit verification code for ${email}`}
         >
           <form onSubmit={handleVerifyOtpSubmit} className="space-y-4">
             {otpError && (

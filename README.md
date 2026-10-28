@@ -159,9 +159,10 @@ VITE_API_BASE_URL=
 ## 🔌 API REST Contracts
 
 ### Authentication (`/api/auth`)
-- `POST /api/auth/register` — Creates an unverified account only in development when demo OTP is explicitly enabled; no token is issued until verification.
+- `POST /api/auth/register` — Creates an unverified account when production email delivery is configured, or in development when demo OTP is explicitly enabled; no token is issued until verification.
 - `POST /api/auth/login` — Authenticates email and password, returning JWT token.
-- `POST /api/auth/verify-otp` — Verifies the development code and issues a JWT session.
+- `POST /api/auth/send-otp` — Sends an email verification code through Resend, or returns a code only in explicitly enabled non-production demo mode.
+- `POST /api/auth/verify-otp` — Verifies the email code and issues a JWT session.
 - `GET /api/auth/me` — Returns logged-in user profile (`Authorization: Bearer <token>`).
 - `POST /api/auth/update` — Updates state, interests, and profile details.
 
@@ -233,8 +234,11 @@ npm run build
 
 - Copy `backend/.env.example` to `backend/.env`. Set a unique random `JWT_SECRET`, `MONGODB_URI`, and the allowed frontend origins in `CORS_ORIGINS`.
 - Gemini responses require `GEMINI_API_KEY`. Private document and complaint-evidence uploads require Cloudinary credentials. Without them, uploads fail explicitly; files are not written to a public local directory.
-- Email verification is not integrated. Signup is available only for non-production development when `ENABLE_DEMO_OTP=true`; the generated demo code is returned to the local client. Do not enable this setting in production.
+- Production email verification sends codes through Resend when `RESEND_API_KEY` and `EMAIL_FROM` are configured. Development-only demo OTP is available only when `ENABLE_DEMO_OTP=true`; never enable it in production.
 - The frontend can be deployed to GitHub Pages, but the backend must be hosted separately. Set `VITE_API_BASE_URL` to the backend origin when building the frontend and allow the GitHub Pages origin in backend `CORS_ORIGINS`. Never put backend secrets in `VITE_` variables.
+- `render.yaml` provides a Render web-service blueprint. Provision MongoDB Atlas and configure `MONGODB_URI`, `RESEND_API_KEY`, and `EMAIL_FROM` in Render; use a sender address verified with Resend. The blueprint generates `JWT_SECRET`.
+- After Render deploys, add the API origin as the GitHub repository Actions variable `VITE_API_BASE_URL` (Settings → Secrets and variables → Actions → Variables), then rerun the `Deploy Smart Bharat AI to GitHub Pages` workflow. Existing user accounts are not migrated from local JSON; create a new account through the email verification flow after setup.
+- Setup sequence: create a MongoDB Atlas database and allow the Render service's outbound IPs; in Render, create a Blueprint from this repository and provide the MongoDB URI plus Resend API key and verified sender; wait for `/api/health` to report `MongoDB Connected`; add the resulting `https://...onrender.com` service origin as the GitHub Actions variable and rerun the Pages workflow.
 - Nearby search uses public Photon and Overpass services. It needs no Google Maps key, but depends on those services' availability, data coverage, rate limits, and terms.
 - The JSON fallback database is for local development only and is not durable or suitable for production. Use a configured MongoDB deployment for persistent user records.
 - The scheme/document catalog has no live verification feed or trustworthy per-entry verification date. Confirm current eligibility, fees, dates, and submission requirements with the linked official authority. Emergency guidance displays 112; additional service-specific numbers are withheld until their current official coverage is verified.

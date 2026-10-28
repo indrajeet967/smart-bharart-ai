@@ -6,6 +6,31 @@ const db = require('../config/db');
 const User = require('../models/User');
 const { verifyToken, JWT_SECRET } = require('../middleware/authMiddleware');
 
+const isEmailDeliveryConfigured = () => Boolean(
+  process.env.RESEND_API_KEY && process.env.EMAIL_FROM
+);
+
+const sendVerificationEmail = async (email, otp) => {
+  const response = await fetch('https://api.resend.com/emails', {
+    method: 'POST',
+    headers: {
+      Authorization: `Bearer ${process.env.RESEND_API_KEY}`,
+      'Content-Type': 'application/json'
+    },
+    body: JSON.stringify({
+      from: process.env.EMAIL_FROM,
+      to: [email],
+      subject: 'Verify your Smart Bharat account',
+      html: `<p>Your Smart Bharat verification code is <strong>${otp}</strong>.</p><p>This code expires in 10 minutes. Do not share it with anyone.</p>`
+    })
+  });
+
+  if (!response.ok) {
+    console.error('Verification email delivery failed with status:', response.status);
+    throw new Error('Verification email could not be delivered.');
+  }
+};
+
 // Helper to sanitize user output (exclude password)
 const sanitizeUser = (user) => {
   const userObj = user.toObject ? user.toObject() : { ...user };
@@ -21,8 +46,8 @@ router.post('/register', async (req, res) => {
   if (!JWT_SECRET) {
     return res.status(503).json({ error: 'Authentication is not configured on this server.' });
   }
-  if (process.env.NODE_ENV === 'production' || process.env.ENABLE_DEMO_OTP !== 'true') {
-    return res.status(503).json({ error: 'Account verification delivery is not configured. Signup is unavailable; existing users can still sign in.' });
+  if (!isEmailDeliveryConfigured() && (process.env.NODE_ENV === 'production' || process.env.ENABLE_DEMO_OTP !== 'true')) {
+    return res.status(503).json({ error: 'Account verification email is not configured. Signup is unavailable until email delivery is set up.' });
   }
 
   if (typeof email !== 'string' || typeof password !== 'string' || !email.trim() || !password) {
@@ -267,7 +292,10 @@ router.post('/send-otp', async (req, res) => {
   const normalizedEmail = email.toLowerCase().trim();
 
   try {
-    if (process.env.NODE_ENV === 'production' || process.env.ENABLE_DEMO_OTP !== 'true') {
+    const useDemoOtp = !isEmailDeliveryConfigured() &&
+      process.env.NODE_ENV !== 'production' &&
+      process.env.ENABLE_DEMO_OTP === 'true';
+    if (!isEmailDeliveryConfigured() && !useDemoOtp) {
       return res.status(503).json({ error: 'Email verification delivery is not configured.' });
     }
 
@@ -295,11 +323,16 @@ router.post('/send-otp', async (req, res) => {
       return res.status(404).json({ error: 'User account not found.' });
     }
 
-    res.json({
-      success: true,
-      message: 'Development verification code generated; no email was sent. (Valid for 10 minutes)',
-      demoOtp: generatedOtp
-    });
+    if (useDemoOtp) {
+      return res.json({
+        success: true,
+        message: 'Development verification code generated; no email was sent. (Valid for 10 minutes)',
+        demoOtp: generatedOtp
+      });
+    }
+
+    await sendVerificationEmail(normalizedEmail, generatedOtp);
+    res.json({ success: true, message: 'Verification code sent to your email.' });
   } catch (err) {
     console.error('Send OTP error:', err);
     res.status(500).json({ error: 'Failed to generate OTP. Please try again.' });
@@ -396,7 +429,10 @@ router.post('/resend-otp', async (req, res) => {
   const normalizedEmail = email.toLowerCase().trim();
 
   try {
-    if (process.env.NODE_ENV === 'production' || process.env.ENABLE_DEMO_OTP !== 'true') {
+    const useDemoOtp = !isEmailDeliveryConfigured() &&
+      process.env.NODE_ENV !== 'production' &&
+      process.env.ENABLE_DEMO_OTP === 'true';
+    if (!isEmailDeliveryConfigured() && !useDemoOtp) {
       return res.status(503).json({ error: 'Email verification delivery is not configured.' });
     }
 
@@ -420,11 +456,16 @@ router.post('/resend-otp', async (req, res) => {
       return res.status(404).json({ error: 'User account not found.' });
     }
 
-    res.json({
-      success: true,
-      message: 'New development verification code generated; no email was sent.',
-      demoOtp: newOtp
-    });
+    if (useDemoOtp) {
+      return res.json({
+        success: true,
+        message: 'New development verification code generated; no email was sent.',
+        demoOtp: newOtp
+      });
+    }
+
+    await sendVerificationEmail(normalizedEmail, newOtp);
+    res.json({ success: true, message: 'A new verification code was sent to your email.' });
   } catch (err) {
     console.error('Resend OTP error:', err);
     res.status(500).json({ error: 'Failed to resend OTP.' });

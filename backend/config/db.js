@@ -24,6 +24,9 @@ let inMemoryMockDb = {
 const connectDB = async () => {
   const uri = process.env.MONGODB_URI;
   if (!uri) {
+    if (process.env.NODE_ENV === 'production') {
+      throw new Error('MONGODB_URI is required in production.');
+    }
     console.warn("⚠️ MONGODB_URI not found in env. Falling back to JSON database storage.");
     isMock = true;
     return;
@@ -37,6 +40,9 @@ const connectDB = async () => {
     console.log("✅ MongoDB Connected Successfully");
   } catch (err) {
     console.error("❌ MongoDB connection failed:", err.message);
+    if (process.env.NODE_ENV === 'production') {
+      throw err;
+    }
     console.warn("⚠️ Falling back to JSON database storage.");
     isMock = true;
   }

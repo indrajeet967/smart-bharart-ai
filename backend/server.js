@@ -20,9 +20,6 @@ app.use(cors({
 app.use(express.json({ limit: '10mb' }));
 app.use(express.urlencoded({ limit: '10mb', extended: true }));
 
-// Connect to Database
-connectDB();
-
 // API Routes
 app.use('/api/auth', require('./routes/auth'));
 app.use('/api/complaints', require('./routes/complaints'));
@@ -57,10 +54,19 @@ app.get('*', (req, res, next) => {
 
 // Start Server
 const PORT = process.env.PORT || 5000;
-if (process.env.NODE_ENV !== 'test' && !process.env.VERCEL) {
-  app.listen(PORT, () => {
-    console.log(`🚀 Smart Bharat Server is running on port ${PORT}`);
-  });
+if (process.env.NODE_ENV !== 'test') {
+  connectDB()
+    .then(() => {
+      if (!process.env.VERCEL && !process.env.AWS_LAMBDA_FUNCTION_NAME) {
+        app.listen(PORT, () => {
+          console.log(`🚀 Smart Bharat Server is running on port ${PORT}`);
+        });
+      }
+    })
+    .catch((err) => {
+      console.error('Failed to initialize the database:', err.message);
+      process.exitCode = 1;
+    });
 }
 
 module.exports = app;
